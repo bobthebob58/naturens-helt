@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Naturens Helt</title>
+  <meta name="description" content="Et 3D-eventyr i nettleseren: utforsk en megastor verden, hjelp dyr og mennesker, og stopp krypskytterne." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="underwater" class="fx"></div>
+  <div id="vignette" class="fx"></div>
+  <div id="hurt" class="fx"></div>
+
+  <!-- ====================== HUD ====================== -->
+  <div id="hud" class="hidden">
+    <div class="hud-tl">
+      <div class="stat-card">
+        <div class="stat-row">
+          <svg class="ico heart" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.8 8.3 2.9 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.8 0 5.9 3.8 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>
+          <div class="bar"><div id="health-fill" class="fill health"></div><div id="health-ghost" class="fill ghost"></div></div>
+          <span id="health-text" class="num">100</span>
+        </div>
+        <div id="breath-row" class="stat-row hidden">
+          <svg class="ico lungs" viewBox="0 0 24 24"><path d="M11 3h2v7.5l2.2 1.6c.3-2.9 1.6-5.6 3.5-5.6 2.1 0 3.3 4.6 3.3 9.4 0 3-1 4.6-3.1 4.6-2.6 0-4.8-2.2-4.8-6v-.6L12 12.3l-2.1 1.6v.6c0 3.8-2.2 6-4.8 6C3 20.5 2 18.9 2 15.9 2 11.1 3.2 6.5 5.3 6.5c1.9 0 3.2 2.7 3.5 5.6L11 10.5z"/></svg>
+          <div class="bar"><div id="breath-fill" class="fill breath"></div></div>
+          <span id="breath-text" class="num">100</span>
+        </div>
+        <div class="stat-row coins-row">
+          <svg class="ico coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#7a5200">M</text></svg>
+          <span id="coins-text" class="coins">0</span>
+          <span id="coins-pop" class="coins-pop"></span>
+        </div>
+      </div>
+      <div id="inventory" class="inventory"></div>
+    </div>
+
+    <div class="hud-tc">
+      <div id="compass"><div id="compass-strip"></div><div class="compass-mark"></div></div>
+      <div class="sub-row">
+        <span id="biome-label" class="pill">Skog</span>
+        <span id="poacher-label" class="pill danger">Krypskyttere: 0 / 0</span>
+      </div>
+    </div>
+
+    <div class="hud-tr">
+      <div class="minimap-wrap">
+        <canvas id="minimap" width="190" height="190"></canvas>
+        <div class="minimap-n">N</div>
+      </div>
+      <div class="map-hint">M: Verdenskart</div>
+    </div>
+
+    <div class="hud-bl">
+      <div id="stealth" class="stealth"><span class="eye"></span><span id="stealth-text">Synlig</span></div>
+      <div id="quest-tracker" class="quest hidden">
+        <div class="quest-title" id="quest-title"></div>
+        <div class="quest-dist" id="quest-dist"></div>
+      </div>
+    </div>
+
+    <div class="hud-br">
+      <div class="slot">
+        <div class="slot-label">Våpen <span class="key">1-4</span></div>
+        <div class="slot-main"><span id="weapon-icon" class="slot-icon">🗡️</span><span id="weapon-name">Machete</span></div>
+        <div id="weapon-dots" class="dots"></div>
+      </div>
+      <div class="slot">
+        <div class="slot-label">Transport <span class="key">E / Q</span></div>
+        <div class="slot-main"><span id="transport-icon" class="slot-icon">🚶</span><span id="transport-name">Til fots</span></div>
+        <div id="transport-sub" class="slot-sub"></div>
+      </div>
+    </div>
+
+    <div id="crosshair"><span></span><span></span><span></span><span></span></div>
+    <div id="hitmarker"></div>
+    <div id="dmg-dirs"></div>
+    <div id="prompt" class="prompt hidden"><span class="key">E</span><span id="prompt-text"></span></div>
+    <div id="dialog" class="dialog hidden"><div id="dialog-name" class="dialog-name"></div><div id="dialog-text"></div></div>
+    <div id="notifications"></div>
+    <div id="hint-bar">B Butikk · H Medisin · V Kamera · C/Venstreklikk Snik · Høyreklikk/F Angrip · Esc Pause</div>
+  </div>
+
+  <!-- ====================== Hovedmeny ====================== -->
+  <div id="menu" class="screen">
+    <div class="menu-bg"></div>
+    <div class="menu-inner">
+      <div class="logo">
+        <div class="logo-leaf">🌿</div>
+        <h1>NATURENS <span>HELT</span></h1>
+        <p class="tagline">Utforsk en megastor verden. Hjelp dyr og mennesker. Stopp krypskytterne.</p>
+      </div>
+      <div class="menu-cols">
+        <div class="panel">
+          <h2>Velg vanskelighetsgrad</h2>
+          <div id="difficulty-list" class="diff-list"></div>
+          <div class="menu-buttons">
+            <button id="btn-new" class="btn primary">▶ Nytt spill</button>
+            <button id="btn-continue" class="btn hidden">⟲ Fortsett lagret spill</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Innstillinger</h2>
+          <label class="setting">Grafikk
+            <select id="opt-quality">
+              <option value="low">Lav (rask)</option>
+              <option value="medium" selected>Middels</option>
+              <option value="high">Høy (vakker)</option>
+            </select>
+          </label>
+          <label class="setting">Musefølsomhet <input id="opt-sens" type="range" min="0.3" max="2.5" step="0.05" value="1" /></label>
+          <label class="setting">Lydvolum <input id="opt-vol" type="range" min="0" max="1" step="0.05" value="0.7" /></label>
+          <label class="setting">Kamera
+            <select id="opt-cam">
+              <option value="third" selected>Tredjeperson</option>
+              <option value="first">Førsteperson</option>
+            </select>
+          </label>
+          <h2 class="mt">Kontroller</h2>
+          <div class="controls-grid" id="controls-grid"></div>
+        </div>
+      </div>
+      <p class="footer-note">Ingen blod – krypskyttere overgir seg og blir arrestert, og dyr blir bare skremt bort.</p>
+    </div>
+  </div>
+
+  <!-- ====================== Lasting ====================== -->
+  <div id="loading" class="screen hidden">
+    <div class="loading-box">
+      <div class="logo-leaf spin">🌍</div>
+      <h2 id="loading-title">Genererer verden …</h2>
+      <div class="progress"><div id="loading-bar"></div></div>
+      <p id="loading-tip" class="tip"></p>
+    </div>
+  </div>
+
+  <!-- ====================== Pause ====================== -->
+  <div id="pause" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Pause</h2>
+      <div class="pause-stats" id="pause-stats"></div>
+      <div class="menu-buttons col">
+        <button id="btn-resume" class="btn primary">▶ Fortsett</button>
+        <button id="btn-save" class="btn">💾 Lagre spill</button>
+        <button id="btn-shop" class="btn">🛒 Butikk</button>
+        <button id="btn-map" class="btn">🗺️ Verdenskart</button>
+        <button id="btn-quit" class="btn danger">⏏ Til hovedmeny</button>
+      </div>
+      <div class="controls-grid small" id="controls-grid-pause"></div>
+    </div>
+  </div>
+
+  <!-- ====================== Butikk ====================== -->
+  <div id="shop" class="screen hidden">
+    <div class="shop-panel">
+      <div class="shop-head">
+        <h2>🛒 Rangerbutikken</h2>
+        <div class="shop-coins"><svg class="ico coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/></svg><span id="shop-coins">0</span> mynter</div>
+        <button id="shop-close" class="btn small">Lukk (B)</button>
+      </div>
+      <div id="shop-tabs" class="tabs"></div>
+      <div id="shop-items" class="shop-items"></div>
+      <p class="shop-foot">Tjen mynter ved å finne skattekister, hjelpe mennesker og dyr, og stoppe krypskyttere.</p>
+    </div>
+  </div>
+
+  <!-- ====================== Verdenskart ====================== -->
+  <div id="mapscreen" class="screen hidden">
+    <div class="map-panel">
+      <div class="map-head">
+        <h2>🗺️ Verdenskart</h2>
+        <div class="legend">
+          <span><i class="lg lg-me"></i>Deg</span>
+          <span><i class="lg lg-camp"></i>Leir funnet</span>
+          <span><i class="lg lg-rumor"></i>Rapportert aktivitet</span>
+          <span><i class="lg lg-quest"></i>Oppdrag</span>
+          <span><i class="lg lg-veh"></i>Kjøretøy</span>
+        </div>
+        <button id="map-close" class="btn small">Lukk (M)</button>
+      </div>
+      <canvas id="bigmap" width="900" height="900"></canvas>
+    </div>
+  </div>
+
+  <!-- ====================== Game over / seier ====================== -->
+  <div id="gameover" class="screen hidden">
+    <div class="panel narrow center">
+      <div class="big-emoji">💤</div>
+      <h2>Spillet er over</h2>
+      <p id="gameover-cause" class="cause"></p>
+      <div id="gameover-stats" class="result-stats"></div>
+      <div class="menu-buttons">
+        <button id="btn-retry" class="btn primary">⟲ Prøv igjen</button>
+        <button id="btn-menu1" class="btn">Hovedmeny</button>
+      </div>
+    </div>
+  </div>
+  <div id="victory" class="screen hidden">
+    <div class="panel narrow center">
+      <div class="big-emoji">🏆</div>
+      <h2>Du er Naturens Helt!</h2>
+      <p class="cause">Alle krypskytterne er stoppet. Dyrene kan leve i fred.</p>
+      <div id="victory-stats" class="result-stats"></div>
+      <div class="menu-buttons">
+        <button id="btn-continue-play" class="btn primary">Fortsett å utforske</button>
+        <button id="btn-menu2" class="btn">Hovedmeny</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="click-to-play" class="screen hidden">
+    <div class="panel narrow center">
+      <h2>Klikk for å spille</h2>
+      <p class="tip">Musen låses til spillet. Trykk Esc for pause.</p>
+    </div>
+  </div>
+
+  <div id="file-warning" class="screen hidden">
+    <div class="panel narrow">
+      <h2>Start spillet via en lokal webserver</h2>
+      <p>Nettlesere blokkerer JavaScript-moduler når en fil åpnes direkte (<code>file://</code>). Start en enkel server i spillmappen:</p>
+      <pre>python3 -m http.server 8000</pre>
+      <p>eller</p>
+      <pre>npx serve .</pre>
+      <p>Åpne deretter <code>http://localhost:8000</code>. Spillet kan også legges ut gratis med GitHub Pages.</p>
+    </div>
+  </div>
+
+  <noscript><div class="screen"><div class="panel narrow"><h2>JavaScript må være slått på for å spille.</h2></div></div></noscript>
+
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('file-warning').classList.remove('hidden');
+      document.getElementById('menu').classList.add('hidden');
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

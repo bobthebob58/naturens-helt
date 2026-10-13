@@ -1,6 +1,8 @@
 // Menyer: hovedmeny med vanskelighetsgrad, pause, butikk, game over og seier.
 import { DIFFICULTY, SHOP, WEAPONS, VEHICLES } from '../config.js';
 import { formatTime } from '../utils/math.js';
+import { LEVELS, BIOMES } from '../levels/levels.js';
+import { SPECIES } from '../levels/fauna.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,9 +31,11 @@ export class Menus {
   constructor(game) {
     this.game = game;
     this.selectedDiff = game.settings.difficulty || 'medium';
+    this.selectedLevel = LEVELS[game.settings.level] ? +game.settings.level : 1;
     this.shopTab = 0;
     $('controls-grid').innerHTML = controlsHTML();
     $('controls-grid-pause').innerHTML = controlsHTML();
+    this.buildLevels();
     this.buildDifficulty();
     this.bindSettings();
 
@@ -50,6 +54,27 @@ export class Menus {
     $('btn-continue-play').onclick = () => game.resume();
     $('click-to-play').onclick = () => game.resume();
     document.querySelectorAll('.btn, .tab, .diff').forEach((b) => b.addEventListener('click', () => game.audio.ui()));
+  }
+
+  buildLevels() {
+    const list = $('level-list');
+    list.innerHTML = Object.values(LEVELS).map((lv) => `
+      <button class="level${lv.id === this.selectedLevel ? ' selected' : ''}" data-id="${lv.id}">
+        <div class="l-top">
+          <div class="l-icon">${lv.icon}</div>
+          <div><div class="l-num">Bane ${lv.id}</div><div class="l-name">${lv.name}</div></div>
+        </div>
+        <div class="l-desc">${lv.desc}</div>
+        <div class="l-biomes">${[lv.bands[1], lv.bands[0], lv.bands[2]].map((k) => `<span>${BIOMES[k].icon} ${BIOMES[k].name}</span>`).join('')}</div>
+      </button>`).join('');
+    list.querySelectorAll('.level').forEach((el) => {
+      el.onclick = () => {
+        this.selectedLevel = +el.dataset.id;
+        list.querySelectorAll('.level').forEach((x) => x.classList.toggle('selected', x === el));
+        this.game.settings.level = this.selectedLevel;
+        this.game.persistSettings();
+      };
+    });
   }
 
   buildDifficulty() {
@@ -137,7 +162,8 @@ export class Menus {
       drown: 'Du druknet – du var under vann for lenge.',
       fall: 'Du falt for langt.',
     };
-    $('gameover-cause').textContent = texts[cause] || 'Helsen din gikk tom.';
+    const sp = SPECIES[cause];
+    $('gameover-cause').textContent = texts[cause] || (sp ? `Du ble angrepet av ${sp.article || 'en'} ${sp.name}.` : 'Helsen din gikk tom.');
     $('gameover-stats').innerHTML = this.statsHTML();
     this.showOnly('gameover');
   }

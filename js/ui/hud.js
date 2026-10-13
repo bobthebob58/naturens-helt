@@ -1,6 +1,5 @@
 // HUD: helse, pust, mynter, våpen, transport, kompass, snikstatus, oppdrag og varsler.
 import { WEAPONS, WEAPON_ORDER, VEHICLES, ITEM_INFO } from '../config.js';
-import { BIOME_NAMES } from '../world/worldgen.js';
 
 const $ = (id) => document.getElementById(id);
 const DIRS = { 0: 'N', 45: 'NØ', 90: 'Ø', 135: 'SØ', 180: 'S', 225: 'SV', 270: 'V', 315: 'NV' };
@@ -138,9 +137,8 @@ export class HUD {
     this.biomeT -= dt;
     if (this.biomeT <= 0) {
       this.biomeT = 0.5;
-      const b = g.gen.biomeAt(p.pos.x, p.pos.z);
-      const icon = b === 'ice' ? '❄️' : b === 'desert' ? '🏜️' : '🌲';
-      this._set('biome', b, () => { E['biome-label'].textContent = `${icon} ${BIOME_NAMES[b]}`; });
+      const b = g.gen.biomeDef(p.pos.x, p.pos.z);
+      this._set('biome', b.key, () => { E['biome-label'].textContent = `${b.icon} ${b.name}`; });
     }
     const st = g.stats;
     this._set('poach', `${st.stopped}/${st.totalPoachers}`, () => {

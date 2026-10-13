@@ -5,20 +5,14 @@ import { WORLD, WEAPONS, WEAPON_ORDER, VEHICLES, VEHICLE_ORDER, ITEM_INFO } from
 import { HumanRig, createWeaponModel } from '../models/characters.js';
 import { clamp, damp, lerp } from '../utils/math.js';
 import { Vehicle } from './vehicles.js';
+import { VEG_INFO } from '../levels/levels.js';
 
 const WATER = WORLD.waterLevel;
 const GRAVITY = 24;
-// Omtrentlig trekrone per tretype (ved skala 1) – brukes for å holde kameraet utenfor kronene
-const FOLIAGE = {
-  pine: { r: 2.1, y0: 1.6, y1: 8.6 },
-  snowPine: { r: 2.1, y0: 1.6, y1: 8.6 },
-  oak: { r: 2.4, y0: 2.4, y1: 7.2 },
-  birch: { r: 1.4, y0: 3.6, y1: 7.6 },
-  palm: { r: 2.3, y0: 6.0, y1: 8.8 },
-};
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const MUD = new THREE.Color(0x5a4a32);
 
 export class Player {
   constructor(game) {
@@ -521,11 +515,10 @@ export class Player {
       this.stepT -= dt * hs;
       if (this.stepT <= 0) {
         this.stepT = this.running ? 2.2 : 1.7;
-        const biome = gen.biomeAt(this.pos.x, this.pos.z);
-        const surf = d2 > 0.05 ? 'water' : biome === 'ice' ? 'snow' : biome === 'desert' ? 'sand' : 'grass';
+        const surf = d2 > 0.05 ? 'water' : gen.biomeDef(this.pos.x, this.pos.z).surface || 'grass';
         if (!this.crouch) g.audio.step(surf);
         if (this.running && Math.random() < 0.5) {
-          g.particles.burst(surf === 'snow' ? 'snow' : surf === 'water' ? 'splash' : 'dust', { x: this.pos.x, y: this.pos.y + 0.1, z: this.pos.z }, 2, { speed: 1.2 });
+          g.particles.burst(surf === 'snow' ? 'snow' : surf === 'water' ? 'splash' : 'dust', { x: this.pos.x, y: this.pos.y + 0.1, z: this.pos.z }, 2, surf === 'mud' ? { speed: 1.2, color: MUD } : { speed: 1.2 });
         }
       }
     }
@@ -626,7 +619,11 @@ export class Player {
   cameraInFoliage(pos) {
     const list = this.game.features.collidersNear(pos.x, pos.z, 3, this._camTmp || (this._camTmp = []));
     for (const c of list) {
-      const f = FOLIAGE[c.type];
+      if (c.box) {
+        if (Math.abs(pos.x - c.x) < c.box.hw + 0.3 && Math.abs(pos.z - c.z) < c.box.hd + 0.3 && pos.y < c.y + c.h + 0.3) return true;
+        continue;
+      }
+      const f = VEG_INFO[c.type]?.foliage;
       if (!f) continue;
       const dy = pos.y - c.y;
       if (dy < f.y0 * c.s || dy > f.y1 * c.s) continue;

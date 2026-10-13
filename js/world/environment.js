@@ -162,7 +162,31 @@ export class Environment {
     this.fogNear = this.fogFar * 0.12;
   }
 
-  update(dt, time, camera, focus, groundAtCam) {
+  /** Sett atmosfæren straks (ved oppstart/teleport) – ellers glir den mykt i update(). */
+  snapAtmosphere(biome) {
+    this._atmoInit = false;
+    this.applyAtmosphere(biome, 1);
+  }
+
+  applyAtmosphere(biome, k) {
+    const a = (biome && biome.atmosphere) || {};
+    if (!this._atmo) {
+      this._atmo = { fog: this.horizon.clone(), water: new THREE.Color(0x2a6a86), top: this.skyTop.clone(), scale: 1 };
+      this._tc = new THREE.Color();
+    }
+    const A = this._atmo;
+    if (!this._atmoInit) { k = 1; this._atmoInit = true; }
+    A.fog.lerp(this._tc.set(a.fog ?? 0xc4dbe9), k);
+    A.water.lerp(this._tc.set(a.water ?? 0x2a6a86), k);
+    A.top.lerp(this._tc.set(a.sky ?? 0x3b7bc4), k);
+    A.scale += ((a.fogScale ?? 1) - A.scale) * k;
+    this.skyUniforms.uHorizon.value.copy(A.fog);
+    this.skyUniforms.uTop.value.copy(A.top);
+    this.waterMat.color.copy(A.water);
+  }
+
+  update(dt, time, camera, focus, groundAtCam, biome = null) {
+    this.applyAtmosphere(biome, 1 - Math.exp(-dt * 0.7));
     this.sky.position.copy(camera.position);
     // Sol og skygge følger spilleren
     const fx = Math.round(focus.x), fz = Math.round(focus.z);
@@ -183,11 +207,12 @@ export class Environment {
       fog.near = 0.5;
       fog.far = 32;
     } else {
-      fog.color.copy(this.horizon);
+      fog.color.copy(this._atmo.fog);
       // Litt lengre sikt når man flyr høyt
       const alt = Math.max(0, camera.position.y - 60);
-      fog.near = this.fogNear + alt * 0.5;
-      fog.far = this.fogFar + alt * 1.2;
+      const sc = this._atmo.scale;
+      fog.near = this.fogNear * sc + alt * 0.5;
+      fog.far = this.fogFar * Math.min(1, 0.35 + sc * 0.65) + alt * 1.2;
     }
 
     // Skyer driver med vinden

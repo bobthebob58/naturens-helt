@@ -1,21 +1,13 @@
-// Dyr: farlige rovdyr (bjørn, isbjørn, ulv, skorpion, hai) og vennlige dyr som trenger hjelp.
+// Dyr: farlige rovdyr og vennlige dyr som trenger hjelp. Artsdata kommer fra js/levels/fauna.js.
 import * as THREE from 'three';
-import { ENEMIES, WORLD } from '../config.js';
-import { createAnimalRig } from '../models/characters.js';
+import { WORLD } from '../config.js';
 import { makeIconSprite } from '../models/geo.js';
 import { perceive, AlertIcon, moveToward, snapToGround } from './ai.js';
 import { dampAngle, damp } from '../utils/math.js';
+import { species, capitalize } from '../levels/fauna.js';
 
 const WATER = WORLD.waterLevel;
 const _v = new THREE.Vector3();
-
-export const FRIENDLY_NAMES = {
-  deer: 'hjorten', reindeer: 'reinsdyret', fox: 'reven', fennec: 'ørkenreven', camel: 'kamelen',
-  penguin: 'pingvinen', rabbit: 'haren',
-};
-
-const HEIGHTS = { bear: 1.9, polarbear: 2.0, wolf: 1.3, scorpion: 1.3, shark: 1.2, deer: 2.2, reindeer: 2.1, fox: 0.9, fennec: 0.8, camel: 3.0, penguin: 1.4, rabbit: 0.8 };
-const RADII = { bear: 0.95, polarbear: 1.0, wolf: 0.6, scorpion: 0.7, shark: 1.0 };
 
 export class Animal {
   /**
@@ -26,16 +18,21 @@ export class Animal {
     this.type = type;
     this.hostile = !!opts.hostile;
     this.need = opts.need || null;
-    this.cfg = ENEMIES[type] || null;
-    this.rig = createAnimalRig(type);
+    const sp = species(type);
+    this.sp = sp;
+    this.cfg = sp.stats || null;
+    if (this.hostile && !this.cfg) this.hostile = false;
+    this.rig = sp.createRig();
     this.group = new THREE.Group();
     this.group.add(this.rig.root);
     game.scene.add(this.group);
-    this.aquatic = type === 'shark';
+    this.aquatic = sp.habitat === 'water';
+    this.amphibious = sp.habitat === 'amphibious';
     this.pos = new THREE.Vector3(x, 0, z);
     this.home = new THREE.Vector3(x, 0, z);
     if (this.aquatic) this.pos.y = WATER - 1.0;
     else snapToGround(this, game, 0);
+    if (sp.habitat === 'amphibious' && this.pos.y < WATER - 0.7) this.pos.y = WATER - 0.3;
     this.heading = Math.random() * Math.PI * 2;
     this.hp = this.cfg ? this.cfg.hp : 50;
     this.awareness = 0;
@@ -49,8 +46,8 @@ export class Animal {
     this.removed = false;
     this.curSpeed = 0;
     this.t = Math.random() * 10;
-    this.hitRadius = RADII[type] ?? 0.6;
-    this.height = HEIGHTS[type] ?? 1.5;
+    this.hitRadius = sp.radius ?? 0.6;
+    this.height = sp.height ?? 1.5;
     this.growled = false;
     if (this.hostile) this.icon = new AlertIcon(this.group, this.height + 0.5);
     if (this.need) {
@@ -58,7 +55,9 @@ export class Animal {
       this.marker.position.y = this.height + 0.6;
       this.group.add(this.marker);
     }
-    this.name = this.hostile ? this.cfg.name : FRIENDLY_NAMES[type] || 'dyret';
+    this.name = sp.definite || 'dyret';
+    this.indefinite = `${sp.article || 'en'} ${sp.name || 'dyr'}`;
+    this.swimming = false;
     if (this.aquatic) this.rig.root.position.y = 0;
   }
 
@@ -102,6 +101,7 @@ export class Animal {
     const p = this.game.player;
     if (this.aquatic) return p.swimming || (!p.vehicle && this.game.gen.waterDepth(p.pos.x, p.pos.z) > 1.0);
     if (p.vehicle) return p.vehicle.type === 'bike';
+    if (this.amphibious) return true;
     if (p.swimming) return false;
     return true;
   }
@@ -117,6 +117,13 @@ export class Animal {
     if (this.removed) return;
     if (this.aquatic) {
       this.pos.y = damp(this.pos.y, this.state === 'chase' ? WATER - 0.55 : WATER - 0.8, 2, dt);
+    } else if (this.amphibious) {
+      // Svømmer i dypt vann (kroppen i vannflaten), går på land ellers
+      const gh = g.gen.groundHeight(this.pos.x, this.pos.z);
+      this.swimming = WATER - gh > (this.sp.swimDepth ?? 0.7);
+      const target = this.swimming ? WATER - (this.sp.swimSink ?? 0.3) : gh;
+      this.pos.y = Math.abs(this.pos.y - target) > 3 ? target : damp(this.pos.y, target, 6, dt);
+      if (!this.swimming && dToPlayer < 100) g.features.resolve(this.pos, this.hitRadius * 0.6, g.extraColliders);
     } else {
       if (dToPlayer < 100) g.features.resolve(this.pos, this.hitRadius * 0.6, g.extraColliders);
       snapToGround(this, g, dt);
@@ -138,7 +145,7 @@ export class Animal {
     if (this.state === 'flee') {
       const ax = this.pos.x - p.pos.x, az = this.pos.z - p.pos.z;
       const l = Math.hypot(ax, az) || 1;
-      moveToward(this, g, this.pos.x + (ax / l) * 10, this.pos.z + (az / l) * 10, cfg.runSpeed, dt, 6, this.aquatic);
+      moveToward(this, g, this.pos.x + (ax / l) * 10, this.pos.z + (az / l) * 10, cfg.runSpeed, dt, 6, this.aquatic || this.amphibious);
       if (this.aquatic) this.keepInWater();
       speed = this.curSpeed;
       this.fleeT -= dt;
@@ -161,7 +168,7 @@ export class Animal {
           anim = 'eat';
         } else {
           if (!this.target) this.pickWanderTarget();
-          const left = moveToward(this, g, this.target.x, this.target.z, cfg.speed, dt, 3, this.aquatic);
+          const left = moveToward(this, g, this.target.x, this.target.z, cfg.speed, dt, 3, this.aquatic || this.amphibious);
           if (this.aquatic) this.keepInWater();
           speed = this.curSpeed;
           anim = 'walk';
@@ -193,7 +200,7 @@ export class Animal {
         const tz = p.vehicle ? p.vehicle.pos.z : p.pos.z;
         const reach = cfg.reach + (p.vehicle ? p.vehicle.cfg.collideRadius : 0.3);
         if (info.dist2 > reach * 0.85) {
-          moveToward(this, g, tx, tz, cfg.runSpeed, dt, 7, this.aquatic);
+          moveToward(this, g, tx, tz, cfg.runSpeed, dt, 7, this.aquatic || this.amphibious);
           if (this.aquatic) this.keepInWater();
           speed = this.curSpeed;
         } else {
@@ -221,7 +228,7 @@ export class Animal {
         break;
       }
     }
-    this.rig.update(dt, speed, anim);
+    this.rig.update(dt, speed, this.swimming && anim !== 'attack' ? 'swim' : anim);
     this.icon.set(this.state === 'chase' ? 2 : this.state === 'suspicious' ? 1 : 0);
     this.icon.pulse(this.t, this.awareness);
   }
@@ -242,7 +249,7 @@ export class Animal {
       const r = 6 + Math.random() * (this.aquatic ? 35 : 28);
       const x = this.home.x + Math.cos(a) * r, z = this.home.z + Math.sin(a) * r;
       const depth = g.gen.waterDepth(x, z);
-      if (this.aquatic ? depth > 2.5 : depth < 0.3) {
+      if (this.aquatic ? depth > 2.5 : this.amphibious ? depth < 4 : depth < 0.3) {
         this.target = new THREE.Vector3(x, 0, z);
         return;
       }
@@ -266,7 +273,7 @@ export class Animal {
         this.target = new THREE.Vector3(this.pos.x + Math.cos(a) * 80, 0, this.pos.z + Math.sin(a) * 80);
       }
     } else if (this.state === 'leave') {
-      moveToward(this, g, this.target.x, this.target.z, 3.5, dt, 3);
+      moveToward(this, g, this.target.x, this.target.z, 3.5, dt, 3, this.amphibious);
       speed = this.curSpeed;
       anim = 'walk';
       this.leaveT -= dt;
@@ -284,7 +291,7 @@ export class Animal {
           const a = Math.random() * Math.PI * 2;
           this.target = new THREE.Vector3(this.home.x + Math.cos(a) * 6, 0, this.home.z + Math.sin(a) * 6);
         }
-        const left = moveToward(this, g, this.target.x, this.target.z, 1.0, dt, 3);
+        const left = moveToward(this, g, this.target.x, this.target.z, 1.0, dt, 3, this.amphibious);
         speed = this.curSpeed;
         anim = 'walk';
         if (left < 0.5 || this.blocked > 1) {
@@ -293,7 +300,7 @@ export class Animal {
         }
       }
     }
-    this.rig.update(dt, speed, anim);
+    this.rig.update(dt, speed, this.swimming && anim !== 'happy' ? 'swim' : anim);
   }
 
   helped() {
@@ -317,6 +324,3 @@ export class Animal {
   }
 }
 
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}

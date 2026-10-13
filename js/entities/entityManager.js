@@ -6,19 +6,9 @@ import { Animal } from './animal.js';
 import { NPC } from './npc.js';
 import { generateCamps, buildCamp } from '../world/camps.js';
 import { dist2D } from '../utils/math.js';
+import { species, capitalize } from '../levels/fauna.js';
 
 const _v = new THREE.Vector3();
-
-const FRIENDLY_BY_BIOME = {
-  forest: ['deer', 'fox', 'rabbit'],
-  desert: ['camel', 'fennec'],
-  ice: ['penguin', 'reindeer'],
-};
-const PREDATORS_BY_BIOME = {
-  forest: [['bear', 0.55], ['wolf', 0.45]],
-  ice: [['polarbear', 0.5], ['wolf', 0.5]],
-  desert: [['scorpion', 1]],
-};
 
 export class EntityManager {
   constructor(game) {
@@ -94,7 +84,7 @@ export class EntityManager {
     const s = g.gen.spawn;
     const x = s.x + 9, z = s.z - 7;
     const npc = new NPC(g, 'ranger', x, z, {
-      name: 'Siri', title: 'Skogvokter',
+      name: 'Siri', title: g.gen.level.ranger || 'Skogvokter',
       look: { shirt: 0x3d7a4a, pants: 0x4a4031, hat: 'ranger', hatColor: 0x8d6e3f, backpack: null, vest: 0x56663c },
     });
     this.npcs.push(npc);
@@ -175,7 +165,7 @@ export class EntityManager {
     }
     // Rovdyr
     const safe = g.time < 25 || dist2D(p.x, p.z, gen.spawn.x, gen.spawn.z) < 110;
-    const landHostile = this.animals.filter((a) => a.hostile && !a.aquatic).length;
+    const landHostile = this.animals.filter((a) => a.hostile && !a.aquatic && !a.amphibious).length;
     if (!safe && landHostile < g.difficulty.maxPredators) {
       for (let i = 0; i < 6; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -186,29 +176,32 @@ export class EntityManager {
         if (h < 1 || gen.slopeAt(x, z) < 0.75) continue;
         if (dist2D(x, z, gen.spawn.x, gen.spawn.z) < 120) continue;
         if (this.camps.some((c) => dist2D(x, z, c.x, c.z) < 50)) continue;
-        const biome = gen.biomeAt(x, z);
-        const table = PREDATORS_BY_BIOME[biome];
+        if (g.features.blockedAt(x, z, 1.5)) continue;
+        const table = gen.biomeDef(x, z).fauna?.predators;
+        if (!table || !table.length) continue;
         let roll = Math.random(), type = table[0][0];
         for (const [t, w] of table) { roll -= w; if (roll <= 0) { type = t; break; } }
-        if (type === 'wolf') {
-          const pack = 1 + Math.floor(Math.random() * 2);
-          for (let k = 0; k < pack; k++) this.animals.push(new Animal(g, 'wolf', x + k * 2.5, z + k * 1.5, { hostile: true }));
-        } else {
-          this.animals.push(new Animal(g, type, x, z, { hostile: true }));
-        }
+        const sp = species(type);
+        const pack = sp.pack ? sp.pack[0] + Math.floor(Math.random() * (sp.pack[1] - sp.pack[0] + 1)) : 1;
+        for (let k = 0; k < pack; k++) this.animals.push(new Animal(g, type, x + k * 2.5, z + k * 1.5, { hostile: true }));
         break;
       }
     }
-    // Haier i dypt vann
-    const sharks = this.animals.filter((a) => a.aquatic).length;
+    // Vannrovdyr (hai i dypt vann, krokodiller i sump osv.)
+    const sharks = this.animals.filter((a) => a.hostile && (a.aquatic || a.amphibious)).length;
     const maxSharks = g.difficulty.key === 'hard' ? 3 : 2;
-    if (sharks < maxSharks && Math.random() < 0.4) {
+    if (!safe && sharks < maxSharks && Math.random() < 0.4) {
       for (let i = 0; i < 6; i++) {
         const a = Math.random() * Math.PI * 2;
         const r = 50 + Math.random() * 90;
         const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
-        if (gen.waterDepth(x, z) > 3.5) {
-          this.animals.push(new Animal(g, 'shark', x, z, { hostile: true }));
+        if (!gen.isInWorld(x, z, 30)) continue;
+        const type = gen.biomeDef(x, z).fauna?.aquatic;
+        if (!type) continue;
+        const sp = species(type);
+        const need = sp.habitat === 'water' ? 3.5 : 0.8;
+        if (gen.waterDepth(x, z) > need) {
+          this.animals.push(new Animal(g, type, x, z, { hostile: true }));
           break;
         }
       }
@@ -227,9 +220,9 @@ export class EntityManager {
         if (h < 1 || gen.slopeAt(x, z) < 0.8) continue;
         if (this.camps.some((c) => dist2D(x, z, c.x, c.z) < 90)) continue;
         if (this.poachers.some((pc) => dist2D(x, z, pc.pos.x, pc.pos.z) < 60)) continue;
-        const biome = gen.biomeAt(x, z);
-        if (Math.random() < 0.55) {
-          const list = FRIENDLY_BY_BIOME[biome];
+        if (g.features.blockedAt(x, z, 1.5)) continue;
+        const list = gen.biomeDef(x, z).fauna?.friendly || [];
+        if (Math.random() < 0.55 && list.length) {
           const type = list[Math.floor(Math.random() * list.length)];
           this.animals.push(new Animal(g, type, x, z, { need: Math.random() < 0.55 ? 'food' : 'water' }));
         } else {
@@ -320,7 +313,4 @@ export class EntityManager {
   }
 }
 
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 

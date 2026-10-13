@@ -197,13 +197,9 @@ export class Combat {
       }
       if (!done) {
         // Hindringer (trær og steiner)
-        const list = g.features.collidersNear(p.pos.x, p.pos.z, 0.1, this._tmp || (this._tmp = []));
-        for (const c of list) {
-          if (Math.hypot(c.x - p.pos.x, c.z - p.pos.z) < c.r && p.pos.y < c.y + 6 * (c.r > 0.9 ? 0.25 : 1)) {
-            g.particles.burst('dust', p.pos, 4, { speed: 1.2 });
-            done = true;
-            break;
-          }
+        if (g.features.pointBlocked(p.pos.x, p.pos.y, p.pos.z)) {
+          g.particles.burst('dust', p.pos, 4, { speed: 1.2 });
+          done = true;
         }
       }
       if (p.vel.lengthSq() > 0.01) {

@@ -126,20 +126,21 @@ class Game {
 
   // ------------------------------------------------------------------
   // Start / lasting
-  async startNewGame(diffKey, sameWorld = false) {
+  async startNewGame(diffKey, sameWorld = false, levelId = null) {
     this.audio.init();
     const seed = sameWorld && this.gen ? this.gen.seed : Math.floor(Math.random() * 1e9);
-    await this.loadWorld(seed, diffKey, null);
+    const level = levelId ?? (sameWorld && this.gen ? this.gen.level.id : this.menus.selectedLevel);
+    await this.loadWorld(seed, diffKey, null, level);
   }
 
   async continueGame() {
     const save = loadSave();
     if (!save) return;
     this.audio.init();
-    await this.loadWorld(save.seed, save.difficulty, save);
+    await this.loadWorld(save.seed, save.difficulty, save, save.level || 1);
   }
 
-  async loadWorld(seed, diffKey, save) {
+  async loadWorld(seed, diffKey, save, levelId = 1) {
     this.state = 'loading';
     this.input.unlock();
     this.hud.show(false);
@@ -160,9 +161,10 @@ class Game {
     this.vehicles = {};
     if (this.chunks) this.chunks.dispose();
 
-    if (!this.gen || this.gen.seed !== seed) {
-      this.gen = new WorldGen(seed);
-      await this.minimap.buildWorldMap(this.gen, (f) => this.menus.setLoading(0.05 + f * 0.5, 'Former fjell, ørkener og isbreer …'));
+    if (!this.gen || this.gen.seed !== seed || this.gen.level.id !== levelId) {
+      this.gen = new WorldGen(seed, levelId);
+      const names = this.gen.bands.map((b) => b.name.toLowerCase());
+      await this.minimap.buildWorldMap(this.gen, (f) => this.menus.setLoading(0.05 + f * 0.5, `Former ${names[1]}, ${names[0]} og ${names[2]} …`));
     }
     this.features = new FeatureStore(this.gen);
     if (!this.chunks) this.chunks = new ChunkManager(this.scene, this.gen, this.features, this.quality);
@@ -199,7 +201,8 @@ class Game {
     this.minimap.reset();
     this.menus.setLoading(1, 'Klar!');
     this.player.updateCamera(0, this.camera);
-    this.env.update(0, 0, this.camera, this.player.pos, 10);
+    this.env.snapAtmosphere(this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
+    this.env.update(0, 0, this.camera, this.player.pos, 10, this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
     this.renderer.compile(this.scene, this.camera);
     await nextFrame();
 
@@ -208,8 +211,9 @@ class Game {
     this.hud.markDirty();
     this.menus.showOnly('click-to-play');
     if (!save) {
-      this.hud.dialog('Skogvokter Siri',
-        `Krypskyttere herjer i skogen, ørkenen og isverdenen – ${this.stats.totalPoachers} av dem! Finn leirene (se kartet med M) og stopp dem alle. Gå på huk for å snike deg innpå.`, 12);
+      const lv = this.gen.level;
+      this.hud.dialog(`${lv.ranger || 'Skogvokter'} Siri`,
+        `${lv.intro} – ${this.stats.totalPoachers} av dem! Finn leirene (se kartet med M) og stopp dem alle. Gå på huk for å snike deg innpå.`, 12);
     } else {
       this.hud.notify('Lagret spill lastet inn.', 'good');
     }
@@ -446,8 +450,8 @@ class Game {
     if (this.state === 'playing') {
       this.update(dt);
     } else if (this.player && (this.state === 'ready' || this.state === 'paused' || this.state === 'shop' || this.state === 'map')) {
-      this.env.update(dt, this.time, this.camera, this.player.pos, this.gen.groundHeight(this.camera.position.x, this.camera.position.z));
-      this.audio.updateAmbient(dt, 'forest', 0, false, false);
+      this.env.update(dt, this.time, this.camera, this.player.pos, this.gen.groundHeight(this.camera.position.x, this.camera.position.z), this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
+      this.audio.updateAmbient(dt, null, 0, false, false);
     }
     const t1 = performance.now();
     if (this.player && this.state !== 'menu' && this.state !== 'loading') this.renderer.render(this.scene, this.camera);
@@ -484,12 +488,12 @@ class Game {
     p.updateCamera(dt, this.camera);
     this.camShake = Math.max(0, this.camShake - dt * 2.5);
     const camGround = this.gen.groundHeight(this.camera.position.x, this.camera.position.z);
-    this.env.update(dt, this.time, this.camera, focus, camGround);
+    const biomeDef = this.gen.biomeDef(focus.x, focus.z);
+    this.env.update(dt, this.time, this.camera, focus, camGround, biomeDef);
 
     this.hud.update(dt);
     this.minimap.update();
-    const biome = this.gen.biomeAt(focus.x, focus.z);
-    this.audio.updateAmbient(dt, biome, focus.y, this.env.underwater, true);
+    this.audio.updateAmbient(dt, biomeDef.ambient, focus.y, this.env.underwater, true);
 
     if (this.victoryT > 0) {
       this.victoryT -= dt;

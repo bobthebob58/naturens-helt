@@ -31,7 +31,8 @@ export function perceive(e, game, dt, opts) {
         e.losT = 0.2 + Math.random() * 0.1;
         const eyeY = e.pos.y + (opts.eyeH ?? 1.6);
         const targetY = p.pos.y + (p.crouch ? 0.9 : 1.3);
-        e.losCache = game.gen.lineOfSight(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z);
+        e.losCache = game.gen.lineOfSight(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z) &&
+          !game.features.segmentBlocked(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z);
       }
       seen = !!e.losCache;
     }

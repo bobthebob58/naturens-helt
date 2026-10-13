@@ -173,8 +173,8 @@ export class Vehicle {
       this.roll = damp(this.roll, roll, 8, dt);
     }
     if (Math.abs(this.speed) > 6 && !this.airborne && Math.random() < dt * 8) {
-      const biome = this.game.gen.biomeAt(this.pos.x, this.pos.z);
-      this.game.particles.burst(biome === 'ice' ? 'snow' : 'dust', { x: this.pos.x - fx * 1.5, y: this.pos.y + 0.2, z: this.pos.z - fz * 1.5 }, 1);
+      const surf = this.game.gen.biomeDef(this.pos.x, this.pos.z).surface;
+      this.game.particles.burst(surf === 'snow' ? 'snow' : 'dust', { x: this.pos.x - fx * 1.5, y: this.pos.y + 0.2, z: this.pos.z - fz * 1.5 }, 1);
     }
   }
 
@@ -264,7 +264,7 @@ export class Vehicle {
       this.pos.y = 320;
       this.vel.y = Math.min(0, this.vel.y);
     }
-    if (this.pos.y - g < 9) this.game.features.resolve(this.pos, cfg.collideRadius, this.game.extraColliders);
+    if (this.pos.y - g < 70) this.game.features.resolve(this.pos, cfg.collideRadius, this.game.extraColliders);
     // Helling
     const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
     const fwdSpeed = this.vel.x * hx + this.vel.z * hz;

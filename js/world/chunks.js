@@ -1,7 +1,8 @@
 // Strømming av terrengbiter rundt spilleren, med detaljnivå (LOD), vegetasjon og skattekister.
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
-import { buildVegetation } from '../models/vegetation.js';
+import { vegGeometry } from '../levels/models.js';
+import { VEG_INFO } from '../levels/levels.js';
 import { createChest } from '../models/props.js';
 
 const CS = WORLD.chunkSize;
@@ -78,11 +79,11 @@ export class ChunkManager {
     this.chunks = new Map();
     this.quality = quality;
     this.windUniforms = { uTime: { value: 0 } };
-    this.geos = buildVegetation();
     this.detailTex = makeDetailTexture();
     this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: this.detailTex });
     this.vegMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     addWind(this.vegMat, 0.022, 1.5, this.windUniforms);
+    this.staticMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.grassMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     addWind(this.grassMat, 0.16, 0.0, this.windUniforms);
     this.collected = new Set();
@@ -285,22 +286,22 @@ export class ChunkManager {
     const col = new THREE.Color();
     let seed = cx * 31 + cz * 17;
     for (const [type, arr] of groups) {
-      const mat = grassOnly ? this.grassMat : this.vegMat;
-      const mesh = new THREE.InstancedMesh(this.geos[type], mat, arr.length);
+      const info = VEG_INFO[type] || {};
+      const mat = grassOnly || info.decor ? this.grassMat : info.static || info.box ? this.staticMat : this.vegMat;
+      const mesh = new THREE.InstancedMesh(vegGeometry(type), mat, arr.length);
       arr.forEach((it, i) => {
         e.set(0, it.ry, 0);
         q.setFromEuler(e);
         p.set(it.x, it.y, it.z);
         s.setScalar(it.s);
-        if (type === 'log') s.set(it.s, it.s, it.s);
         m4.compose(p, q, s);
         mesh.setMatrixAt(i, m4);
         seed = (seed * 9301 + 49297) % 233280;
-        const v = 0.86 + (seed / 233280) * 0.24;
+        const v = info.box ? 0.94 + (seed / 233280) * 0.12 : 0.86 + (seed / 233280) * 0.24;
         col.setRGB(v, v, v);
         mesh.setColorAt(i, col);
       });
-      mesh.castShadow = !grassOnly && type !== 'snowDrift';
+      mesh.castShadow = !grassOnly && !info.noShadow && !info.decor;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
       group.add(mesh);

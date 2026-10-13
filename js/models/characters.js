@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { lambert, limb } from './geo.js';
 import { damp, clamp } from '../utils/math.js';
 
-function addBox(parent, w, h, d, color, x = 0, y = 0, z = 0) {
+export function addBox(parent, w, h, d, color, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(color));
   m.position.set(x, y, z);
   m.castShadow = true;
@@ -278,10 +278,12 @@ export const ANIMAL_DEFS = {
 };
 
 export class QuadrupedRig {
+  /** type: nøkkel i ANIMAL_DEFS, eller et eget definisjonsobjekt (samme felt + valgfri key). */
   constructor(type) {
-    const d = { ...ANIMAL_DEFS[type] };
+    const d = typeof type === 'string' ? { ...ANIMAL_DEFS[type] } : { ...type };
     this.d = d;
-    this.type = type;
+    this.type = typeof type === 'string' ? type : d.key || 'custom';
+    type = this.type;
     this.root = new THREE.Group();
     this.bodyG = new THREE.Group();
     this.bodyG.position.y = d.legLen + d.bodyH / 2;

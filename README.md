@@ -51,9 +51,21 @@ npx serve .
 | V | Bytt mellom 1. og 3. person |
 | Esc | Pause |
 
+## Baner
+
+Velg fritt mellom tre baner i startmenyen. Hver bane er en egen 4 × 4 km verden med tre biomer fra nord til sør, egne dyr og egne krypskytterleirer:
+
+| Bane | Biomer | Farlige dyr | Dyr som trenger hjelp |
+| --- | --- | --- | --- |
+| 🌲 **1 · Nordlig villmark** | Skog, isverden, ørken | Bjørn, isbjørn, ulv, kjempeskorpion, hai | Hjort, rev, hare, reinsdyr, pingvin, kamel, ørkenrev |
+| 🌴 **2 · Tropisk villmark** | Regnskog, tropiske øyer, sump | Jaguar, villsvin, krokodille, hai | Tapir, kapybara, papegøye, havskilpadde |
+| 🦁 **3 · Savanne og fjell** | Afrikansk savanne, fjellandskap, by | Løve, hyene, snøleopard, ulv, bjørn, vakthund, krokodille | Elefant, sjiraff, sebra, neshorn, steinbukk, katt |
+
+I byen gjemmer smuglerne fangede dyr i skipscontainere, og husene blokkerer sikten – perfekt for å snike seg innpå.
+
 ## Innhold
 
-- **Verden:** 4 × 4 km prosedyrisk generert terreng med isverden (nord), skog (midten), ørken (sør), innsjøer og hav rundt. Terrenget strømmes inn i biter med detaljnivå etter avstand.
+- **Verden:** Prosedyrisk generert terreng med tre biomer per bane, innsjøer og hav rundt. Terrenget strømmes inn i biter med detaljnivå etter avstand, og tåke, vannfarge og lyd endrer seg mykt mellom biomene.
 - **Skatter:** Skattekister er gjemt ved trær og steiner, på fjelltopper og på bunnen av innsjøer.
 - **Snik:** Gå på huk for å senke kameraet, bevege deg saktere og bli mye vanskeligere å oppdage – særlig i busker. Snikangrep med macheten får en krypskytter til å overgi seg med én gang.
 - **Fiender:** Krypskyttere og rovdyr (bjørn, isbjørn, ulv, kjempeskorpion og hai) vet ikke hvor du er. De har synsradius, synsfelt og hørsel, og angriper først når de oppdager deg.
@@ -71,6 +83,7 @@ index.html          HUD og menyer
 css/style.css       Stil
 js/main.js          Spill-løkke og tilstander
 js/config.js        Balansering: vanskelighetsgrad, våpen, kjøretøy, butikk
+js/levels/          Baner, biomer (én modul per biom + 3D-modeller) og artsregister – se js/levels/README.md
 js/world/           Terrenggenerering, biter (chunks), vegetasjon, himmel/vann, leirer
 js/models/          Prosedyriske 3D-modeller (trær, figurer, kjøretøy, gjenstander)
 js/entities/        Spiller, kjøretøy, krypskyttere, dyr, mennesker, AI

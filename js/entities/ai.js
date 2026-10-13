@@ -69,9 +69,31 @@ export class AlertIcon {
 
 /** Beveg en bakkebunden enhet mot et punkt. Unngår dypt vann. Returnerer avstand igjen. */
 export function moveToward(e, game, tx, tz, speed, dt, turnRate = 6, allowWater = false) {
+  // Sitter enheten fast (f.eks. mot en husvegg eller et tre)? Gå en kort omvei.
+  if (e._mvx !== undefined && e._mvExp > 0.01) {
+    const moved = Math.hypot(e.pos.x - e._mvx, e.pos.z - e._mvz);
+    if (moved < e._mvExp * 0.3) e.stuckT = (e.stuckT || 0) + dt;
+    else e.stuckT = Math.max(0, (e.stuckT || 0) - dt * 2);
+    if (e.stuckT > 0.9 && !(e.detourT > 0)) {
+      const side = Math.random() < 0.5 ? 1 : -1;
+      const h = e.heading + side * (Math.PI / 2 + (Math.random() - 0.5) * 0.6);
+      e.detour = { x: e.pos.x + Math.sin(h) * 9, z: e.pos.z + Math.cos(h) * 9 };
+      e.detourT = 1.6;
+      e.stuckT = 0;
+    }
+  }
+  const realD = Math.hypot(tx - e.pos.x, tz - e.pos.z);
+  if (e.detourT > 0) {
+    e.detourT -= dt;
+    tx = e.detour.x;
+    tz = e.detour.z;
+  }
   const dx = tx - e.pos.x, dz = tz - e.pos.z;
   const d = Math.hypot(dx, dz);
-  if (d < 0.05) return 0;
+  e._mvx = e.pos.x;
+  e._mvz = e.pos.z;
+  e._mvExp = 0;
+  if (d < 0.05) return realD;
   const target = Math.atan2(dx, dz);
   e.heading = dampAngle(e.heading, target, turnRate, dt);
   const facing = Math.cos(angleDiff(e.heading, target));
@@ -92,7 +114,8 @@ export function moveToward(e, game, tx, tz, speed, dt, turnRate = 6, allowWater 
   e.pos.x = nx;
   e.pos.z = nz;
   e.curSpeed = step / Math.max(dt, 1e-4);
-  return d - step;
+  e._mvExp = step;
+  return e.detourT > 0 ? realD : d - step;
 }
 
 export function snapToGround(e, game, dt) {

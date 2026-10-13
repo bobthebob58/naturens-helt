@@ -137,6 +137,7 @@ export class Menus {
     const g = this.game;
     const s = g.stats;
     return [
+      ['Bane', `${g.gen?.level?.icon || ''} ${g.gen?.level?.name || ''}`],
       ['Tid', formatTime(g.time)],
       ['Krypskyttere stoppet', `${s.stopped} / ${s.totalPoachers}`],
       ['Mynter tjent', s.coinsEarned],

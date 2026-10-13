@@ -43,6 +43,7 @@ export class QuestManager {
       const h = gen.groundHeight(x, z);
       if (h < 0.8 || gen.slopeAt(x, z) < 0.75) continue;
       if (g.features.inClearing(x, z, 10) && npc.kind !== 'ranger') continue;
+      if (g.features.blockedAt(x, z, 1.2)) continue;
       spot = { x, z, h };
     }
     if (!spot) spot = { x: npc.pos.x + 20, z: npc.pos.z, h: gen.groundHeight(npc.pos.x + 20, npc.pos.z) };

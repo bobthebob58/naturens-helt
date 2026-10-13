@@ -28,6 +28,11 @@ const TIPS = [
   'Tips: Haier angriper bare svømmere – i båten er du trygg.',
   'Tips: Kjøp dyremat og vann i butikken (B) for å hjelpe sultne og tørste dyr.',
   'Tips: Løping lager lyd. Rovdyr og krypskyttere kan høre deg!',
+  'Tips: I sumpen lurer krokodillene i vannet – de kan også gå på land.',
+  'Tips: På de tropiske øyene trenger du båt for å komme deg rundt.',
+  'Tips: I byen blokkerer husene sikten. Bruk dem til å snike deg forbi smuglerne.',
+  'Tips: Løver og hyener jakter på savannen – hold avstand eller kjør bil.',
+  'Tips: Du kan velge fritt mellom tre baner i startmenyen.',
 ];
 
 function blankStats() {

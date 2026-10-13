@@ -240,7 +240,6 @@ export class Player {
       }
     } else {
       const need = cfg.kind === 'air' ? 4.5 : 1.8;
-      const tmp = [];
       for (let r = 3; r <= 24 && !spot; r += 1.5) {
         for (let a = 0; a < 12; a++) {
           const ang = Math.atan2(fwdZ, fwdX) + (a % 2 ? 1 : -1) * Math.ceil(a / 2) * 0.5;
@@ -248,9 +247,7 @@ export class Player {
           const depth = gen.waterDepth(x, z);
           if (cfg.kind === 'land' && depth > 0.3) continue;
           if (gen.slopeAt(x, z) < 0.75) continue;
-          g.features.collidersNear(x, z, need, tmp);
-          const blocked = tmp.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + need);
-          if (blocked) continue;
+          if (g.features.blockedAt(x, z, need)) continue;
           spot = { x, z };
           break;
         }

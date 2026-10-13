@@ -1,6 +1,6 @@
 // Kjøretøymodeller: rusten sykkel, terrengbil, motorbåt og helikopter.
 import * as THREE from 'three';
-import { paint, xf, merge, vmesh, cyl, box, sphere, lambert } from './geo.js';
+import { paint, xf, merge, vmesh, cyl, box, lambert } from './geo.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion();

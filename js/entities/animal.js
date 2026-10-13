@@ -4,7 +4,7 @@ import { ENEMIES, WORLD } from '../config.js';
 import { createAnimalRig } from '../models/characters.js';
 import { makeIconSprite } from '../models/geo.js';
 import { perceive, AlertIcon, moveToward, snapToGround } from './ai.js';
-import { dampAngle, damp, clamp } from '../utils/math.js';
+import { dampAngle, damp } from '../utils/math.js';
 
 const WATER = WORLD.waterLevel;
 const _v = new THREE.Vector3();

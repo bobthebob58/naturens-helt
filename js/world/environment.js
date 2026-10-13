@@ -115,8 +115,8 @@ export class Environment {
     this.tile = 24;
     this.waterNormals.repeat.set(size / this.tile, size / this.tile);
     this.waterMat = new THREE.MeshPhongMaterial({
-      color: 0x2a6a86, specular: 0xbad4e0, shininess: 140, transparent: true, opacity: 0.8,
-      normalMap: this.waterNormals, normalScale: new THREE.Vector2(0.45, 0.45), side: THREE.DoubleSide,
+      color: 0x2a6a86, specular: 0x5f7f8c, shininess: 90, transparent: true, opacity: 0.82,
+      normalMap: this.waterNormals, normalScale: new THREE.Vector2(0.22, 0.22), side: THREE.DoubleSide,
     });
     const wg = new THREE.PlaneGeometry(size, size, 1, 1);
     wg.rotateX(-Math.PI / 2);

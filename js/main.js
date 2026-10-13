@@ -174,6 +174,8 @@ class Game {
     this.stats = { ...blankStats(), ...(save?.stats || {}) };
     this.stoppedIds = new Set(save?.stoppedPoachers || []);
     this.time = save?.time || 0;
+    this.victoryT = 0;
+    this.victoryShown = false;
 
     this.menus.setLoading(0.58, 'Setter opp krypskytterleirer …');
     await nextFrame();
@@ -306,6 +308,8 @@ class Game {
   }
 
   victory() {
+    this.victoryShown = true;
+    this.victoryT = 0;
     this.state = 'victory';
     this.input.unlock();
     this.audio.stopEngine();
@@ -415,7 +419,7 @@ class Game {
     this.addCoins(REWARDS.poacher, 'Krypskytter arrestert');
     const left = this.stats.totalPoachers - this.stats.stopped;
     if (left > 0) this.hud.notify(`🎯 ${left} krypskytter${left === 1 ? '' : 'e'} igjen.`, 'quest');
-    else setTimeout(() => { if (this.state === 'playing') this.victory(); }, 2500);
+    else if (!this.victoryShown) this.victoryT = 2.5;
     this.save(false);
   }
 
@@ -486,6 +490,11 @@ class Game {
     this.minimap.update();
     const biome = this.gen.biomeAt(focus.x, focus.z);
     this.audio.updateAmbient(dt, biome, focus.y, this.env.underwater, true);
+
+    if (this.victoryT > 0) {
+      this.victoryT -= dt;
+      if (this.victoryT <= 0) this.victory();
+    }
 
     this.autosaveT -= dt;
     if (this.autosaveT <= 0) {

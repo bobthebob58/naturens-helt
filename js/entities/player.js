@@ -144,7 +144,7 @@ export class Player {
       view.traverse((o) => { if (o.isMesh) { o.castShadow = false; } });
       view.rotation.y = Math.PI;
       if (id === 'machete') view.rotation.set(0.25, Math.PI + 0.15, 0.1);
-      if (id === 'bow') { view.rotation.set(0, Math.PI, 0.1); view.position.set(-0.15, 0.05, 0); }
+      if (id === 'bow') { view.rotation.set(0, Math.PI, 0.25); view.position.set(0.12, 0.02, 0.05); view.scale.setScalar(0.55); }
     }
     this.rig.setHeld(this.weaponModels[id].held);
     while (this.viewModel.children.length) this.viewModel.remove(this.viewModel.children[0]);
@@ -427,7 +427,6 @@ export class Player {
       }
     }
 
-    const depth = WATER - groundH;
     // Vertikal bevegelse
     if (this.swimming) {
       const diving = this.crouch;

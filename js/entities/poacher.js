@@ -147,6 +147,13 @@ export class Poacher {
         if (this.waitT > 0) {
           this.waitT -= dt;
           this.curSpeed = 0;
+          // Speid rundt mens han står stille
+          this.lookT = (this.lookT ?? 0) - dt;
+          if (this.lookT <= 0) {
+            this.lookT = 1.5 + this.rng() * 2.5;
+            this.lookDir = this.heading + (this.rng() - 0.5) * 2.8;
+          }
+          this.heading = dampAngle(this.heading, this.lookDir ?? this.heading, 2, dt);
         } else {
           if (!this.target) {
             const a = this.rng() * Math.PI * 2;

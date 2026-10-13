@@ -1,7 +1,7 @@
 // Animerte figurer: mennesker, firbeinte dyr, pingvin, hai og skorpion.
 // Alle modeller ser langs +Z (heading = rotation.y).
 import * as THREE from 'three';
-import { lambert, limb, paint, xf, merge, vmesh, cyl, box, cone, sphere, ico } from './geo.js';
+import { lambert, limb } from './geo.js';
 import { damp, clamp } from '../utils/math.js';
 
 function addBox(parent, w, h, d, color, x = 0, y = 0, z = 0) {

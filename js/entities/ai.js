@@ -20,9 +20,13 @@ export function perceive(e, game, dt, opts) {
   let seen = false;
   let heard = false;
   e.losT = (e.losT ?? 0) - dt;
+  let peripheral = false;
   if (dist < sight && !p.dead) {
     const ang = Math.abs(angleDiff(e.heading, Math.atan2(dx, dz)));
-    if (ang < (opts.fov ?? 2.2) / 2 || dist < 3.5 * vis) {
+    const inFov = ang < (opts.fov ?? 2.2) / 2;
+    // Perifert syn på kort hold – men ikke når spilleren sniker
+    peripheral = !inFov && !p.crouch && dist < sight * 0.35;
+    if (inFov || peripheral || dist < 3.5 * vis) {
       if (e.losT <= 0) {
         e.losT = 0.2 + Math.random() * 0.1;
         const eyeY = e.pos.y + (opts.eyeH ?? 1.6);
@@ -35,7 +39,7 @@ export function perceive(e, game, dt, opts) {
   const nr = p.noiseRadius() * diff.hearMult;
   if (dist < nr && !p.dead) heard = true;
   let gain = 0;
-  if (seen) gain = diff.awarenessRate * (0.35 + 1.3 * (1 - dist / sight));
+  if (seen) gain = diff.awarenessRate * (0.35 + 1.3 * (1 - dist / sight)) * (peripheral ? 0.5 : 1);
   if (heard) gain = Math.max(gain, diff.awarenessRate * 0.75);
   if (gain > 0) e.awareness = Math.min(1, e.awareness + gain * dt);
   else e.awareness = Math.max(0, e.awareness - dt * 0.1);

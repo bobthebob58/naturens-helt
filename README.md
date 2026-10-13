@@ -3,6 +3,23 @@
 Et 3D-spill i nettleseren (HTML, CSS og JavaScript med [Three.js](https://threejs.org) via CDN).
 Utforsk en megastor verden med skog, ørken og isverden, hjelp dyr og mennesker – og stopp alle krypskytterne. Ingen blod: krypskyttere overgir seg og blir arrestert, og dyr blir bare skremt bort.
 
+![Helikopter over den megastore verdenen](docs/screenshots/07-helikopter.jpg)
+
+## Bilder fra spillet
+
+| | |
+| --- | --- |
+| ![Hovedmeny med vanskelighetsgrad](docs/screenshots/01-meny.jpg) | ![Start i skogen hos skogvokter Siri](docs/screenshots/02-skog-start.jpg) |
+| **Hovedmeny** – velg Lett, Medium eller Vanskelig. | **Start i skogen** – skogvokter Siri gir det første oppdraget. |
+| ![Snik mot krypskytterleir](docs/screenshots/03-snik-mot-leir.jpg) | ![Krypskyttere angriper i ørkenen](docs/screenshots/04-orken-angrep.jpg) |
+| **Snik** – på huk mot en leir. «?» betyr at krypskytteren er mistenksom. | **Ørken** – krypskytterne har oppdaget deg («!») og skyter. |
+| ![Isverden med isbjørn](docs/screenshots/05-isverden-isbjorn.jpg) | ![Motorbåt på innsjø](docs/screenshots/06-baat.jpg) |
+| **Isverden** – isbjørn og et sultent reinsdyr. | **Båt** – kryss innsjøer trygt for haiene. |
+| ![Førsteperson ved dyr i bur](docs/screenshots/08-forsteperson-bur.jpg) | ![Dykking med pustemåler](docs/screenshots/09-under-vann.jpg) |
+| **Førsteperson** – befri dyr som krypskytterne har fanget. | **Under vann** – følg med på pustemåleren. |
+| ![Butikken](docs/screenshots/10-butikk.jpg) | ![Verdenskart](docs/screenshots/11-verdenskart.jpg) |
+| **Butikken (B)** – våpen, medisin, dyrefôr og kjøretøy. | **Verdenskart (M)** – leirer og rapportert aktivitet. |
+
 ## Slik starter du spillet
 
 Spillet bruker JavaScript-moduler, så det må serveres fra en webserver (ikke åpnes direkte som fil):

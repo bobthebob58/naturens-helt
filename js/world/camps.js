@@ -103,7 +103,7 @@ export function buildCamp(game, camp) {
     const rig = createAnimalRig(camp.cagedType);
     const s = camp.cagedType === 'deer' || camp.cagedType === 'reindeer' ? 0.6 : 1;
     rig.root.scale.setScalar(s);
-    rig.root.position.set(0.8, 0.08, 0.6);
+    rig.root.position.set(0, 0.08, -0.1);
     cg.add(rig.root);
     cage = { id: `cage-${camp.id}`, camp, mesh: cg, rig, freed: false, pos: cg.position.clone(), type: camp.cagedType, runT: 0 };
   }

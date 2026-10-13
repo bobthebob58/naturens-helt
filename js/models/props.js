@@ -1,6 +1,6 @@
 // Gjenstander i verden: skattekister, ryggsekk, telt, bål, kasser og bur.
 import * as THREE from 'three';
-import { paint, xf, merge, vmesh, cyl, box, ico, jitter, glowTexture } from './geo.js';
+import { paint, xf, merge, vmesh, cyl, box, jitter, glowTexture } from './geo.js';
 
 let chestGeo = null;
 export function createChest(rare = false) {

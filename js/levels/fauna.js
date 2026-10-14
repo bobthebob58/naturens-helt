@@ -6,11 +6,14 @@
 //   article    'en' | 'ei' | 'et'
 //   height     omtrentlig høyde i meter (plassering av ikoner over hodet)
 //   radius     treffradius / kollisjonsradius i meter
+//   length     valgfri lengde fra snute til bakende/halespiss i meter (skalering av dyr i bur)
 //   habitat    'land' (standard) | 'water' (kun dypt vann, som hai) | 'amphibious' (land og vann, som krokodille)
+//   swimSink   amfibiske arter: hvor dypt føttene (y = 0) ligger under vannflaten når dyret svømmer
+//   swimDepth  amfibiske arter: vanndybden der dyret begynner å svømme
 //   stats      kun for rovdyr: { hp, damage, speed, runSpeed, reach, cooldown, sight }
 //   pack       valgfri [min, maks] flokkstørrelse for rovdyr
 //   createRig  () => rigg med { root: THREE.Object3D, update(dt, speed, state) }
-//              state: 'idle' | 'walk' | 'run' | 'eat' | 'attack' | 'happy'
+//              state: 'idle' | 'walk' | 'run' | 'eat' | 'attack' | 'happy' | 'swim'
 import { ENEMIES } from '../config.js';
 import { createAnimalRig } from '../models/characters.js';
 import { SPECIES as QUADRUPEDS } from '../models/fauna/quadrupeds.js';

@@ -321,8 +321,10 @@ export class QuadrupedRig {
     addBox(this.head, d.headH * 1.05, d.headH, d.headL * 0.6, d.color, 0, 0, d.headL * 0.2);
     addBox(this.head, d.headH * 0.6, d.headH * 0.6, d.headL * 0.5, d.belly, 0, -d.headH * 0.15, d.headL * 0.65);
     addBox(this.head, d.headH * 0.25, d.headH * 0.2, 0.04, d.snout, 0, -d.headH * 0.02, d.headL * 0.9);
-    addBox(this.head, 0.04, 0.04, 0.02, 0x111111, -d.headH * 0.38, d.headH * 0.15, d.headL * 0.45);
-    addBox(this.head, 0.04, 0.04, 0.02, 0x111111, d.headH * 0.38, d.headH * 0.15, d.headL * 0.45);
+    // Øyne på sidene av hodet (egne definisjoner legger på sine egne øyne)
+    if (!d.key) {
+      for (const s of [-1, 1]) addBox(this.head, 0.04, 0.04, 0.02, 0x111111, s * (d.headH * 0.525 - 0.012), d.headH * 0.2, d.headL * 0.5 - 0.012);
+    }
     // Ører
     const earC = d.color;
     if (d.ears === 'round') {

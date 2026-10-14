@@ -135,7 +135,10 @@ export class EntityManager {
       if (cage.freed && cage.runT > 0) {
         cage.runT -= dt;
         const r = cage.rig.root;
-        r.position.z += dt * 4;
+        // Snu mot døra (dyret står på tvers i buret) og løp ut
+        r.rotation.y = Math.max(0, r.rotation.y - dt * 5);
+        r.position.x += Math.sin(r.rotation.y) * dt * 2;
+        r.position.z += Math.cos(r.rotation.y) * dt * 4;
         cage.rig.update(dt, 4, 'walk');
         if (cage.runT <= 0) cage.mesh.remove(r);
       }

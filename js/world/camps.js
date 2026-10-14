@@ -121,8 +121,10 @@ export function buildCamp(game, camp) {
     const cg = place(createCage(), 7.5, -3, -0.5, 1.1);
     const sp = species(camp.cagedType);
     const rig = sp.createRig();
-    const s = Math.min(1, 1.25 / (sp.height || 1));
+    // Buret er 1,6 × 1,2 × 1,3 m: dyret står på tvers (langs buret) og skaleres ned så det får plass
+    const s = Math.min(1, 1.25 / (sp.height || 1), 1.5 / (sp.length || 1.2));
     rig.root.scale.setScalar(s);
+    rig.root.rotation.y = Math.PI / 2;
     rig.root.position.set(0, 0.08, -0.1);
     cg.add(rig.root);
     cage = { id: `cage-${camp.id}`, camp, mesh: cg, rig, freed: false, pos: cg.position.clone(), type: camp.cagedType, runT: 0 };

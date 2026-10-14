@@ -1,7 +1,8 @@
 // 3D-modeller for biomet Savanne: paraplyakasier (flat krone), baobab-trær (tykk flaskestamme), termittuer,
 // tørre busker, tornekratt, kandelabertrær (euphorbia), døde trær, avrundede kopje-steinblokker og gyllent gress.
-// Lavpolygon med vertex-farger (Lambert). Gress er dobbeltsidig med en speilvendt kopi (twoSided), fordi
-// vegetasjonsmaterialet bare tegner forsiden og pyntmaterialet gir baksiden motsatt normal (ellers blir den svart).
+// Lavpolygon med vertex-farger (Lambert). Pyntgresset tegnes med det dobbeltsidige pyntmaterialet (samme normal på
+// begge sider), så det holder med én flate per strå. Elefantgress-tuene er vanlig vegetasjon (bare forsiden tegnes)
+// og får derfor en speilvendt kopi (twoSided).
 import * as THREE from 'three';
 import { paint, xf, merge, jitter, shadeVariation, cone } from '../../models/geo.js';
 import { jIco } from '../../models/vegetation.js';
@@ -20,8 +21,8 @@ const BARK_DARK = 0x3f342b;
 const BARK_LIGHT = 0x6b5b4b;
 const BAOBAB = [0x7c6d5f, 0x998977, 0xa69582];
 const DEADWOOD = [0x857c70, 0xa49c8f];
-const ACACIA = { top: 0x6f8a3c, mid: 0x587532, bot: 0x3e5426 };
-const ACACIA_WIDE = { top: 0x7d9343, mid: 0x627b35, bot: 0x445a28 };
+const ACACIA = { top: 0x6f8a3c, mid: 0x5b7834, bot: 0x4b6230 };
+const ACACIA_WIDE = { top: 0x7d9343, mid: 0x657e37, bot: 0x516733 };
 const LATERITE = [0x8c4a30, 0xa65d3c, 0xbf7a52];
 const GRANITE = [0xa89787, 0xb7a796, 0x93857a, 0xb09c78];
 const STRAW = { base: 0x6e5830, mid: 0xbb9346, tip: 0xd9bb72 };
@@ -121,8 +122,8 @@ function liftNormals(g, lift) {
 }
 
 /**
- * Gjør tynne flater (gresstrå) dobbeltsidige: en speilvendt kopi med motsatt normal, forskjøvet litt bakover.
- * Fungerer både med enkeltsidig vegetasjonsmateriale og med dobbeltsidig pyntmateriale.
+ * Gjør tynne flater (gresstrå) dobbeltsidige for det enkeltsidige vegetasjonsmaterialet: en speilvendt kopi med
+ * motsatt normal, forskjøvet litt bakover. Pynt (decor) trenger ikke dette.
  */
 function twoSided(g, lift = 2, off = 0.012) {
   const p = g.attributes.position.array, n = g.attributes.normal.array, c = g.attributes.color.array;
@@ -172,7 +173,26 @@ function canopyPad(r, thick, seg, rnd, pal, t) {
     T.otri(B[i], C[j], C[i], o, cMid, cBot, cBot);
     T.otri(bot, C[j], C[i], o, cBot);
   }
-  return xf(T.geo(), t);
+  return xf(softenUnderside(T.geo()), t);
+}
+
+/**
+ * Kroneundersiden: vri nedovervendte flatenormaler ut mot kanten, slik at undersiden får litt himmellys og ikke
+ * blir helt svart når man står under treet. Origo må være midt i kroneskiva.
+ */
+function softenUnderside(g) {
+  const p = g.attributes.position, n = g.attributes.normal;
+  for (let i = 0; i < p.count; i += 3) {
+    if (n.getY(i) >= -0.05) continue;
+    const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+    const l = Math.hypot(cx, cz) || 1;
+    for (let j = i; j < i + 3; j++) {
+      const x = n.getX(j) * 0.4 + (cx / l) * 0.8, y = n.getY(j) * 0.3, z = n.getZ(j) * 0.4 + (cz / l) * 0.8;
+      const m = Math.hypot(x, y, z) || 1;
+      n.setXYZ(j, x / m, y / m, z / m);
+    }
+  }
+  return g;
 }
 
 /** Paraplyakasie: skjev stamme som deler seg i greiner som vifter ut under en bred, flat krone. */
@@ -458,7 +478,7 @@ function grassTuft(o) {
 
 /** Høyt, gyllent savannegress (pynt): flere tuer spredt over ca. 2,5 m med rustrøde frøaks. */
 function tallGrass() {
-  return twoSided(grassTuft({
+  return liftNormals(grassTuft({
     tufts: 4, blades: 9, spread: 1.0, h: [0.8, 1.35], w: 0.055, lean: 0.3,
     base: STRAW.base, mid: STRAW.mid, tip: STRAW.tip, heads: 3, seed: 5,
   }), 2.4);
@@ -466,7 +486,7 @@ function tallGrass() {
 
 /** Lav, tørr og blek gresstust (pynt) for jordflekker, stier og kopjer. */
 function shortGrass() {
-  return twoSided(grassTuft({
+  return liftNormals(grassTuft({
     tufts: 2, blades: 7, spread: 0.35, h: [0.28, 0.5], w: 0.045, lean: 0.45,
     base: 0x7d6a42, mid: 0xb59e68, tip: 0xd9c79a, seed: 9,
   }), 2.4);
@@ -474,7 +494,7 @@ function shortGrass() {
 
 /** Friskt, grønt gress ved vannhullene (pynt). */
 function greenGrass() {
-  return twoSided(grassTuft({
+  return liftNormals(grassTuft({
     tufts: 3, blades: 7, spread: 0.45, h: [0.5, 0.85], w: 0.055, lean: 0.35,
     base: 0x2f4f1d, mid: 0x5d8a32, tip: 0x9dbf5a, seed: 13,
   }), 2.4);

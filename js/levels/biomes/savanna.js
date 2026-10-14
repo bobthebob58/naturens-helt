@@ -16,7 +16,7 @@ function kopjeAt(n, x, z) {
 /** Dyretråkk/stier: slyngede linjer der støyen krysser null. 1 midt på stien, 0 utenfor. */
 function pathAt(n, x, z) {
   const v = n.extra.noise2D(x * 0.0019 - 140.2, z * 0.0019 + 57.9);
-  return 1 - smoothstep(0.015, 0.03, Math.abs(v));
+  return 1 - smoothstep(0.012, 0.026, Math.abs(v));
 }
 
 /** Tetthet av akasieskog: −1 = åpen gresslette, 1 = tett akasieskog. */
@@ -64,7 +64,7 @@ const VEG = {
   savanna_thornbush: { radius: 0, cover: 1.1, height: 1.5, scale: [0.8, 1.35] },
   savanna_grassClump: { radius: 0, cover: 1.3, height: 1.7, sink: 0.05, scale: [0.8, 1.3] },
   savanna_boulder: { radius: 0.95, cover: 1.6, rock: true },
-  savanna_kopje: { radius: 2.5, cover: 3.2, height: 4.6, sink: 0.35, scale: [0.75, 1.45, 1.3] },
+  savanna_kopje: { radius: 2.5, cover: 3.2, height: 3.5, sink: 0.35, scale: [0.75, 1.45, 1.3] },
   savanna_tallgrass: { radius: 0, cover: 0, decor: true },
   savanna_shortgrass: { radius: 0, cover: 0, decor: true },
   savanna_greengrass: { radius: 0, cover: 0, decor: true },
@@ -90,8 +90,9 @@ export default {
     }
     // Vannhull: egne, grunne vannhull med slake gjørmebredder (lakeFactor = 0, så worldgen legger ikke på egne
     // innsjøer her). Samme innsjøstøy som worldgen, slik at vannet henger sammen med nabobiomenes innsjøer (3 støykall).
+    // Senkningen starter langt ute (slake, brede skråninger ned mot vannet – ikke kratere)
     const lk = n.lake.fbm(x * 0.0032, z * 0.0032, 3);
-    const basin = smoothstep(0.4, 0.565, lk);
+    const basin = smoothstep(0.3, 0.565, lk);
     if (basin > 0) h = lerp(h, Math.min(h, lerp(2.2, -2.6, smoothstep(0.545, 0.67, lk))), basin);
     return h;
   },
@@ -104,7 +105,7 @@ export default {
     const olive = smoothstep(0.1, 0.65, n.color.noise2D(x * 0.0032 + 50.3, z * 0.0032 - 20.8)) * 0.55;
     r = lerp(r, 0.62, olive); g = lerp(g, 0.58, olive); b = lerp(b, 0.3, olive);
     // Rødbrun jord: store åpne flater og små flekker
-    const soil = Math.min(1, bareAt(n, x, z) * 0.72 + smoothstep(0.76, 0.92, v2) * 0.5);
+    const soil = Math.min(1, bareAt(n, x, z) * 0.64 + smoothstep(0.78, 0.94, v2) * 0.38);
     r = lerp(r, lerp(0.66, 0.58, v2), soil); g = lerp(g, lerp(0.4, 0.33, v2), soil); b = lerp(b, lerp(0.24, 0.2, v2), soil);
     // Dyretråkk (nedtrampet, rødbrun jord)
     const k = kopjeAt(n, x, z);
@@ -135,7 +136,8 @@ export default {
     return out;
   },
 
-  mapWater: [[106, 122, 86], [36, 86, 122]],
+  // Grumsete, blågrønt vann – skiller seg fra gresset på kartet, men er mer gjørmete enn klare innsjøer
+  mapWater: [[82, 128, 128], [40, 92, 116]],
 
   /** Velg vegetasjon for et kandidatpunkt på land. Åpne sletter, akasieskog, kopjer og vannhull. */
   pick(p, r2, r3) {
@@ -165,6 +167,23 @@ export default {
     return pickByTable(r3, wd > 0.28 ? WOODS : PLAINS);
   },
 
+  /**
+   * Ekstra steinblokker på kopjene: 100 tilfeldige kandidater per bit gir for få steiner på de små haugene, så
+   * toppene og skråningene fylles opp med store, avrundede granittblokker her (deterministisk via api.rng).
+   */
+  structures(api) {
+    const n = api.gen.noise;
+    for (let i = 0; i < 48; i++) {
+      const x = api.x0 + api.rng() * api.size, z = api.z0 + api.rng() * api.size;
+      const r1 = api.rng(), r2 = api.rng(), r3 = api.rng();
+      const k = kopjeAt(n, x, z);
+      if (k < 0.4 || r1 > k * 0.9) continue;
+      if (api.weightAt(x, z) < 0.6 || api.gen.groundHeight(x, z) < 1) continue; // ikke i vannhull
+      if (r2 < 0.42) api.emit('savanna_kopje', x, z, 0.7 + r3 * 0.6, r2 * 15);
+      else api.emit('savanna_boulder', x, z, 0.9 + r3 * r3 * 1.5, r2 * 15);
+    }
+  },
+
   /** Pynt: høyt, gyllent gress over det meste av sletta, kort tørt gress på jord og stein, grønt gress ved vann. */
   decor(p, r1, r2) {
     const { h, x, z } = p;
@@ -192,5 +211,5 @@ export default {
   camp: { style: 'tent' },
   spawn: { minH: 3, maxH: 18, dry: 1.2 },
   ambient: { wind: 0.05, insects: true, birds: true },
-  atmosphere: { fog: 0xe6d6b2, water: 0x5b6f4a, sky: 0x4f8fd6, fogScale: 0.95 },
+  atmosphere: { fog: 0xe6d6b2, water: 0x5b6f4a, sky: 0x4f8fd6, fogScale: 0.95, waterOpacity: 0.86 }, // grumsete vannhull
 };

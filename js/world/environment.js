@@ -180,6 +180,8 @@ export class Environment {
     A.water.lerp(this._tc.set(a.water ?? 0x2a6a86), k);
     A.top.lerp(this._tc.set(a.sky ?? 0x3b7bc4), k);
     A.scale += ((a.fogScale ?? 1) - A.scale) * k;
+    A.opacity = (A.opacity ?? 0.82) + ((a.waterOpacity ?? 0.82) - (A.opacity ?? 0.82)) * k;
+    this.waterMat.opacity = A.opacity;
     this.skyUniforms.uHorizon.value.copy(A.fog);
     this.skyUniforms.uTop.value.copy(A.top);
     this.waterMat.color.copy(A.water);

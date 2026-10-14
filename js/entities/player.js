@@ -13,6 +13,7 @@ const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const MUD = new THREE.Color(0x5a4a32);
+let MAX_FOLIAGE = null; // største kroneradius (×maks skala) – beregnes ved første bruk
 
 export class Player {
   constructor(game) {
@@ -614,7 +615,14 @@ export class Player {
   }
 
   cameraInFoliage(pos) {
-    const list = this.game.features.collidersNear(pos.x, pos.z, 3, this._camTmp || (this._camTmp = []));
+    if (MAX_FOLIAGE === null) {
+      MAX_FOLIAGE = 3;
+      for (const k in VEG_INFO) {
+        const f = VEG_INFO[k].foliage;
+        if (f) MAX_FOLIAGE = Math.max(MAX_FOLIAGE, f.r * 2.5);
+      }
+    }
+    const list = this.game.features.collidersNear(pos.x, pos.z, MAX_FOLIAGE, this._camTmp || (this._camTmp = []));
     for (const c of list) {
       if (c.box) {
         if (Math.abs(pos.x - c.x) < c.box.hw + 0.3 && Math.abs(pos.z - c.z) < c.box.hd + 0.3 && pos.y < c.y + c.h + 0.3) return true;

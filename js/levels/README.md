@@ -47,7 +47,7 @@ export default {
   camp: { style: 'tent' | 'container', minH: 2.5, maxH: 62, dryRadius: 18, dryH: 1, slope: 0.88 },
   spawn: { minH: 3, maxH: 18, dry: 1.2 }, // bare midtbiomer: krav til startpunktet
   ambient: { wind: 0.04, birds: true | 'many', insects: true, frogs: true, city: true },
-  atmosphere: { fog: 0xc4dbe9, water: 0x2a6a86, sky: 0x3b7bc4, fogScale: 1 }, // fogScale < 1 = tettere tåke
+  atmosphere: { fog: 0xc4dbe9, water: 0x2a6a86, sky: 0x3b7bc4, fogScale: 1, waterOpacity: 0.82 }, // fogScale < 1 = tettere tåke
 };
 ```
 
@@ -68,6 +68,10 @@ For hver terrengbit (128 × 128 m) trekkes 100 tilfeldige kandidatpunkter. Kjern
 kaller `pick` (på land) eller `pickWater` (under vann). Returner `null` for å hoppe over – det styrer tettheten
 (f.eks. `if (r2 > 0.6) return null`). 170 kandidater per bit går til `decor`.
 
+`pickWater` kalles for kandidater med −6 ≤ h < 0.35 (også rett over vannflaten; da er `p.depth` negativ).
+Vannplanter kan ha `decor: true` (dobbeltsidig, vind, ingen skygge) eller `float: true` (ligger i vannflaten).
+`structures(api)` kan også brukes til ekstra vegetasjon når 100 kandidater er for lite (f.eks. tett regnskog).
+
 **Typenavn**: nye typer skal ha biomnøkkel som prefiks (`rainforest_kapok`). Eksisterende typer fra bane 1 kan
 gjenbrukes (`pine, snowPine, oak, birch, bush, berryBush, rock, rock2, desertRock, iceRock, cactus, deadBush, palm,
 iceSpike, grass, flowers, snowDrift, log`) – kopier da `vegInfo`-oppføringen nøyaktig fra `forest.js`/`desert.js`/`ice.js`.
@@ -86,12 +90,13 @@ iceSpike, grass, flowers, snowDrift, log`) – kopier da `vegInfo`-oppføringen 
 | `float: true` | Plasseres i vannflaten (vannliljer o.l. fra `pickWater`) |
 | `static: true` | Ingen vindsvai (bygninger, skilt, biler) |
 | `noShadow: true` | Kaster ikke skygge |
+| `near: true` | Tegnes bare innen én terrengbit fra spilleren (lav undervegetasjon – sparer ytelse; dekning gjelder likevel) |
 | `box: { hw, hd, h }` | Rektangulær kollisjon (halv bredde x, halv dybde z, høyde) for bygninger. Blokkerer sikt (`blocksSight: false` for å slå av). Roter kun i hele 90° |
 
 ### `structures(api)` (by)
 Kalles én gang per terrengbit før den tilfeldige vegetasjonen. `api = { cx, cz, x0, z0, size, gen, rng, weightAt(x, z),
 inClearing(x, z, pad), emit(type, x, z, s = 1, ry = 0, y = null) }`. `emit` plasserer en type (setter bakkehøyde selv)
-og hopper over punkter i lysninger eller oppå andre bokser. Bruk et rutenett låst til verdenskoordinater slik at
+og hopper over punkter i lysninger eller oppå andre bokser. Oppgis `y`, trekkes typens `sink` fra den. Bruk et rutenett låst til verdenskoordinater slik at
 gater fortsetter sømløst over bitgrensene. Tilfeldig vegetasjon unngår automatisk boksene.
 
 ### Fauna

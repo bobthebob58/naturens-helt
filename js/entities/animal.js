@@ -317,6 +317,10 @@ export class Animal {
     if (this.removed) return;
     this.removed = true;
     this.game.scene.remove(this.group);
+    // Frigjør geometri som bare dette dyret bruker (delte artsgeometrier og materialer gjenbrukes)
+    this.group.traverse((o) => {
+      if (o.isMesh && !o.userData.sharedGeometry) o.geometry.dispose();
+    });
   }
 
   dispose() {

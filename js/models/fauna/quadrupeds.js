@@ -22,7 +22,7 @@ const DEFS = {
   capybara:    { key: 'capybara', len: 1.05, bodyH: 0.52, width: 0.5, legLen: 0.22, legW: 0.11, neck: 0.12, headL: 0.37, headH: 0.29, color: 0x8c5e38, belly: 0x7c5232, ears: 'small', tail: 'stub', snout: 0x2a1c14 },
   zebra:       { key: 'zebra', len: 1.55, bodyH: 0.66, width: 0.5, legLen: 0.78, legW: 0.11, neck: 0.62, headL: 0.6, headH: 0.28, color: 0xf2f1ec, belly: 0xf2f1ec, ears: 'none', tail: 'none', snout: 0x1a1a1a },
   rhino:       { key: 'rhino', len: 2.4, bodyH: 1.08, width: 1.12, legLen: 0.55, legW: 0.3, neck: 0.32, headL: 0.85, headH: 0.5, color: 0x8b8882, belly: 0x7d7a74, ears: 'none', tail: 'none', snout: 0x55524e },
-  elephant:    { key: 'elephant', len: 3.0, bodyH: 1.6, width: 1.6, legLen: 1.45, legW: 0.5, neck: 0.3, headL: 0.9, headH: 1.0, color: 0x8e8a85, belly: 0x84807b, ears: 'none', tail: 'none', snout: 0x8e8a85 },
+  elephant:    { key: 'elephant', len: 3.0, bodyH: 1.6, width: 1.6, legLen: 1.45, legW: 0.5, neck: 0.42, headL: 0.9, headH: 1.0, color: 0x8e8a85, belly: 0x84807b, ears: 'none', tail: 'none', snout: 0x8e8a85 },
   giraffe:     { key: 'giraffe', len: 1.95, bodyH: 0.95, width: 0.7, legLen: 1.78, legW: 0.14, neck: 2.0, headL: 0.62, headH: 0.28, color: 0xe8c48c, belly: 0xf1e3c4, ears: 'none', tail: 'none', snout: 0x2a1e18 },
   ibex:        { key: 'ibex', len: 1.25, bodyH: 0.56, width: 0.44, legLen: 0.62, legW: 0.1, neck: 0.36, headL: 0.38, headH: 0.24, color: 0x8a7153, belly: 0xdcd0b8, ears: 'small', tail: 'stub', snout: 0x2a2018 },
   cat:         { key: 'cat', len: 0.44, bodyH: 0.2, width: 0.17, legLen: 0.18, legW: 0.05, neck: 0.08, headL: 0.17, headH: 0.15, color: 0xd9842e, belly: 0xf3dfc2, ears: 'pointy', tail: 'none', snout: 0xd88a8a },
@@ -58,6 +58,7 @@ const decalMat = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffs
 function deco(parent, key, build, cast = false) {
   const m = new THREE.Mesh(shared(key, build), cast ? vertexMat : decalMat);
   m.castShadow = cast;
+  m.userData.sharedGeometry = true; // delt mellom alle dyr av arten – må ikke frigjøres (dispose) ved despawn
   parent.add(m);
   return m;
 }
@@ -192,11 +193,14 @@ class FaunaRig extends QuadrupedRig {
   constructor(def, o = {}) {
     super(def);
     const d = this.d;
+    // Rekkefølgen QuadrupedRig bygger hodet i: hodeboks, snute, nese, øye, øye, ører …
     const hc = this.head.children;
     this.headBox = hc[0];
     this.muzzle = hc[1];
     this.noseTip = hc[2];
-    this.head.remove(hc[4], hc[3]);
+    // Standardøynene ligger skjult inne i hodeboksen – vi lager egne, synlige øyne i stedet
+    const hidden = [hc[3], hc[4]].filter((m) => m && m.isMesh && m.geometry.parameters?.width === 0.04);
+    if (hidden.length) this.head.remove(...hidden);
     this.feet = this.legs.map((l) => l.children[1]);
     if (o.feet !== undefined) for (const f of this.feet) f.material = lambert(o.feet);
     this.slope = o.slope || 0;
@@ -692,7 +696,7 @@ function rhinoRig() {
 class ElephantRig extends FaunaRig {
   constructor() {
     const d = DEFS.elephant;
-    super(d, { neck: -0.3, heavy: 0.85, feet: 0x77736e });
+    super(d, { neck: -0.22, heavy: 0.85, feet: 0x77736e });
     const H = d.headH, L = d.headL;
     const ivory = 0xefe8d6, wr = 0x7a7672;
     this.head.remove(this.muzzle, this.noseTip);
@@ -723,21 +727,21 @@ class ElephantRig extends FaunaRig {
     this.ears = [];
     for (const s of [-1, 1]) {
       const g = new THREE.Group();
-      g.position.set(s * H * 0.5, H * 0.14, 0);
+      g.position.set(s * H * 0.5, H * 0.14, -L * 0.08);
       g.rotation.z = s * 0.12;
       this.head.add(g);
       deco(g, `elephant-ear${s}`, (parts) => {
         // Bred øvre del, smalere midtparti og en flik nederst (afrikansk elefant), mørk kant og lys innside
         const ec = 0x827d78, rim = 0x67635e, x = s * 0.03;
-        parts.push(box(0.06, 0.75, 1.0, ec, { x, y: 0, z: -0.5 }));
-        parts.push(box(0.06, 0.45, 0.8, ec, { x, y: -0.55, z: -0.45 }));
-        parts.push(box(0.055, 0.42, 0.45, ec, { x, y: -0.92, z: -0.33 }));
-        parts.push(box(0.068, 0.07, 0.96, rim, { x, y: 0.375, z: -0.5 }));
-        parts.push(box(0.068, 0.8, 0.07, rim, { x, y: -0.02, z: -1.0 }));
-        parts.push(box(0.068, 0.46, 0.07, rim, { x, y: -0.55, z: -0.85, rx: -0.25 }));
-        parts.push(box(0.064, 0.07, 0.42, rim, { x, y: -1.12, z: -0.33 }));
-        parts.push(box(0.012, 0.66, 0.86, 0xa48e88, { x: -s * 0.002, y: -0.02, z: -0.49 }));
-        parts.push(box(0.012, 0.42, 0.64, 0xa48e88, { x: -s * 0.002, y: -0.55, z: -0.44 }));
+        parts.push(box(0.06, 0.75, 0.86, ec, { x, y: 0, z: -0.43 }));
+        parts.push(box(0.06, 0.45, 0.7, ec, { x, y: -0.55, z: -0.39 }));
+        parts.push(box(0.055, 0.42, 0.4, ec, { x, y: -0.92, z: -0.28 }));
+        parts.push(box(0.068, 0.07, 0.84, rim, { x, y: 0.375, z: -0.43 }));
+        parts.push(box(0.068, 0.8, 0.07, rim, { x, y: -0.02, z: -0.86 }));
+        parts.push(box(0.068, 0.46, 0.07, rim, { x, y: -0.55, z: -0.73, rx: -0.25 }));
+        parts.push(box(0.064, 0.07, 0.38, rim, { x, y: -1.12, z: -0.28 }));
+        parts.push(box(0.012, 0.66, 0.74, 0xa48e88, { x: -s * 0.002, y: -0.02, z: -0.42 }));
+        parts.push(box(0.012, 0.42, 0.56, 0xa48e88, { x: -s * 0.002, y: -0.55, z: -0.38 }));
       }, true);
       this.ears.push({ g, s });
     }
@@ -766,7 +770,7 @@ class ElephantRig extends FaunaRig {
     this.poseCurl = [0.0, 0.35, 0.45, 0.5, 0.55, 0.6, 0.6];
     this.poseUp = [-1.15, -0.38, -0.32, -0.26, -0.2, -0.1, 0.2];
     this.trunk.forEach((g, i) => { g.rotation.x = this.poseRest[i]; });
-    for (const e of this.ears) e.g.rotation.y = -e.s * 0.5;
+    for (const e of this.ears) e.g.rotation.y = -e.s * 0.75;
     for (const leg of this.legs) {
       deco(leg, 'elephant-leg', (parts) => {
         parts.push(box(d.legW + 0.02, 0.025, d.legW * 1.1 + 0.02, wr, { y: -d.legLen * 0.48 }));
@@ -805,7 +809,7 @@ class ElephantRig extends FaunaRig {
       g.rotation.z = Math.sin(t * (0.9 + walk * 1.5) - i * 0.45) * (0.03 + walk * 0.05) * (1 + i * 0.3);
     }
     // Ørene vifter
-    const spread = excited ? 1.0 + Math.sin(t * 7) * 0.15 : 0.5 + Math.sin(t * 1.5) * 0.14 - walk * 0.1;
+    const spread = excited ? 1.25 + Math.sin(t * 7) * 0.15 : 0.75 + Math.sin(t * 1.5) * 0.14 - walk * 0.12;
     for (const e of this.ears) e.g.rotation.y = damp(e.g.rotation.y, -e.s * spread, 6, dt);
   }
 }
@@ -925,39 +929,40 @@ function ibexRig() {
 // ======================================================================
 // Artsregister
 // ======================================================================
-const land = (name, definite, article, height, radius, createRig, extra = {}) => ({
-  name, definite, article, height, radius, habitat: 'land', stats: null, createRig, ...extra,
+// length: lengde fra snute til bakende uten hale (m) – ekstra felt, f.eks. til å skalere dyr i bur
+const land = (name, definite, article, height, radius, length, createRig, extra = {}) => ({
+  name, definite, article, height, radius, length, habitat: 'land', stats: null, createRig, ...extra,
 });
 
 export const SPECIES = {
   // Rovdyr
-  jaguar: land('jaguar', 'jaguaren', 'en', 1.2, 0.72, jaguarRig, {
+  jaguar: land('jaguar', 'jaguaren', 'en', 1.2, 0.72, 2.0, jaguarRig, {
     stats: { name: 'jaguar', hp: 90, damage: 16, speed: 2.6, runSpeed: 11, reach: 1.9, cooldown: 1.0, sight: 0.9 },
   }),
-  boar: land('villsvin', 'villsvinet', 'et', 1.1, 0.62, boarRig, {
+  boar: land('villsvin', 'villsvinet', 'et', 1.1, 0.62, 2.0, boarRig, {
     stats: { name: 'villsvin', hp: 80, damage: 11, speed: 2.4, runSpeed: 8.5, reach: 1.6, cooldown: 0.9, sight: 0.6 },
   }),
-  lion: land('løve', 'løven', 'en', 1.7, 0.9, lionRig, {
+  lion: land('løve', 'løven', 'en', 1.7, 0.9, 2.4, lionRig, {
     stats: { name: 'løve', hp: 140, damage: 20, speed: 2.4, runSpeed: 10, reach: 2.2, cooldown: 1.2, sight: 0.85 },
   }),
-  hyena: land('hyene', 'hyenen', 'en', 1.35, 0.6, hyenaRig, {
+  hyena: land('hyene', 'hyenen', 'en', 1.35, 0.6, 1.85, hyenaRig, {
     stats: { name: 'hyene', hp: 60, damage: 9, speed: 2.8, runSpeed: 9.5, reach: 1.7, cooldown: 0.8, sight: 0.85 },
     pack: [2, 3],
   }),
-  snowleopard: land('snøleopard', 'snøleoparden', 'en', 1.05, 0.65, snowleopardRig, {
+  snowleopard: land('snøleopard', 'snøleoparden', 'en', 1.05, 0.65, 1.7, snowleopardRig, {
     stats: { name: 'snøleopard', hp: 90, damage: 15, speed: 2.6, runSpeed: 11, reach: 1.8, cooldown: 1.0, sight: 0.9 },
   }),
-  dog: land('vakthund', 'vakthunden', 'en', 1.2, 0.5, dogRig, {
+  dog: land('vakthund', 'vakthunden', 'en', 1.2, 0.5, 1.65, dogRig, {
     stats: { name: 'vakthund', hp: 55, damage: 8, speed: 3.0, runSpeed: 10, reach: 1.6, cooldown: 0.75, sight: 0.95 },
     pack: [1, 2],
   }),
   // Vennlige dyr (og dyr i bur)
-  tapir: land('tapir', 'tapiren', 'en', 1.25, 0.85, tapirRig),
-  capybara: land('kapybara', 'kapybaraen', 'en', 0.8, 0.5, capybaraRig),
-  zebra: land('sebra', 'sebraen', 'en', 1.9, 0.75, zebraRig),
-  rhino: land('neshorn', 'neshornet', 'et', 1.9, 1.2, rhinoRig),
-  elephant: land('elefant', 'elefanten', 'en', 3.3, 1.6, () => new ElephantRig()),
-  giraffe: land('sjiraff', 'sjiraffen', 'en', 4.9, 0.85, () => new GiraffeRig()),
-  ibex: land('steinbukk', 'steinbukken', 'en', 1.8, 0.6, ibexRig),
-  cat: land('katt', 'katten', 'en', 0.45, 0.25, () => catRig()),
+  tapir: land('tapir', 'tapiren', 'en', 1.25, 0.85, 2.6, tapirRig),
+  capybara: land('kapybara', 'kapybaraen', 'en', 0.8, 0.5, 1.6, capybaraRig),
+  zebra: land('sebra', 'sebraen', 'en', 1.9, 0.75, 2.45, zebraRig),
+  rhino: land('neshorn', 'neshornet', 'et', 1.9, 1.2, 3.6, rhinoRig),
+  elephant: land('elefant', 'elefanten', 'en', 3.3, 1.6, 4.5, () => new ElephantRig()),
+  giraffe: land('sjiraff', 'sjiraffen', 'en', 4.9, 0.85, 3.2, () => new GiraffeRig()),
+  ibex: land('steinbukk', 'steinbukken', 'en', 1.8, 0.6, 1.85, ibexRig),
+  cat: land('katt', 'katten', 'en', 0.45, 0.25, 0.6, () => catRig()),
 };

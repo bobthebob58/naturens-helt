@@ -123,8 +123,14 @@ export class Menus {
     }
   }
 
-  setContinueVisible(v) {
-    $('btn-continue').classList.toggle('hidden', !v);
+  /** save: det lagrede spillet (eller null). Knappen viser hvilken bane den fortsetter. */
+  setContinueVisible(save) {
+    const btn = $('btn-continue');
+    btn.classList.toggle('hidden', !save);
+    if (save) {
+      const lv = LEVELS[save.level || 1] || LEVELS[1];
+      btn.textContent = `⟲ Fortsett: ${lv.icon} ${lv.name}`;
+    }
   }
 
   setLoading(frac, title, tip) {

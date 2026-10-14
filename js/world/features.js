@@ -95,6 +95,13 @@ export class FeatureStore {
     if (!gen.isInWorld(x0 + CS / 2, z0 + CS / 2, -CS)) return empty;
     const w = this.w;
     const boxes = [];
+    // Overlapper fotavtrykket til en ny boks en eksisterende boks? (rett inntil hverandre er greit)
+    const boxOverlap = (it) => {
+      for (const b of boxes) {
+        if (Math.abs(it.x - b.x) < it.box.hw + b.box.hw - 0.05 && Math.abs(it.z - b.z) < it.box.hd + b.box.hd - 0.05) return true;
+      }
+      return false;
+    };
     const inBox = (x, z, pad) => {
       for (const b of boxes) {
         if (Math.abs(x - b.x) < b.box.hw + pad && Math.abs(z - b.z) < b.box.hd + pad) return true;
@@ -117,7 +124,7 @@ export class FeatureStore {
           const gy = y ?? gen.groundHeight(x, z);
           const info = VEG_INFO[type] || {};
           const it = makeItem(type, x, gy - (info.sink ?? 0), z, s, ry);
-          if (it.box && inBox(x, z, 0.5)) return null;
+          if (it.box ? boxOverlap(it) : it.r > 0 && inBox(x, z, it.r)) return null;
           items.push(it);
           if (it.box) boxes.push(it);
           return it;
@@ -149,7 +156,7 @@ export class FeatureStore {
       const info = VEG_INFO[type] || { radius: 0, cover: 0 };
       const s = b.scale ? b.scale(type, r4) ?? defaultScale(info, r4) : defaultScale(info, r4);
       const sink = info.sink ?? (info.rock ? 0.1 * s : 0.15);
-      const y = info.float ? WATER + 0.03 : h - sink;
+      const y = info.float ? WATER + 0.045 : h - sink; // over bølgetoppen (vannflaten svinger ±0,03 m)
       const it = makeItem(type, x, y, z, s, r5 * TAU);
       items.push(it);
       if (it.box) boxes.push(it);
@@ -308,6 +315,18 @@ export class FeatureStore {
     return false;
   }
 
+  /** Høyeste tak (bygning/boks) rett under punktet som ligger lavere enn maxY, ellers -Infinity. */
+  roofBelow(x, z, maxY) {
+    let best = -Infinity;
+    const list = this.collidersNear(x, z, 0.1, this._tmp2);
+    for (const c of list) {
+      if (!c.box || Math.abs(x - c.x) > c.box.hw || Math.abs(z - c.z) > c.box.hd) continue;
+      const top = c.y + c.h;
+      if (top <= maxY && top > best) best = top;
+    }
+    return best;
+  }
+
   /** Treffer et punkt (f.eks. et prosjektil) en hindring? */
   pointBlocked(x, y, z) {
     const list = this.collidersNear(x, z, 0.1, this._tmp2);
@@ -347,8 +366,9 @@ export class FeatureStore {
           };
           if (!slab(ax, dx, c.x - c.box.hw, c.x + c.box.hw)) continue;
           if (!slab(az, dz, c.z - c.box.hd, c.z + c.box.hd)) continue;
-          const ty = ay + (by - ay) * ((t0 + t1) / 2);
-          if (ty < c.y + c.h) return true;
+          // Strålen er lineær: den er blokkert hvis den går inn eller ut av boksen under taket
+          const yIn = ay + (by - ay) * t0, yOut = ay + (by - ay) * t1;
+          if (Math.min(yIn, yOut) < c.y + c.h) return true;
         }
       }
     }

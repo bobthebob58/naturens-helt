@@ -454,7 +454,8 @@ export class Player {
       this.pos.x = ox;
       this.pos.z = oz;
     }
-    const gh = gen.groundHeight(this.pos.x, this.pos.z);
+    // Bakken – eller et tak man står på (etter å ha landet helikopteret der)
+    const gh = Math.max(gen.groundHeight(this.pos.x, this.pos.z), g.features.roofBelow(this.pos.x, this.pos.z, this.pos.y + 0.3));
     const wasOnGround = this.onGround;
     if (this.pos.y <= gh) {
       if (!wasOnGround && this.vel.y < -17 && !this.swimming && WATER - gh < 1.0) {

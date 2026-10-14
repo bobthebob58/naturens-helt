@@ -28,10 +28,13 @@ const TIPS = [
   'Tips: Haier angriper bare svømmere – i båten er du trygg.',
   'Tips: Kjøp dyremat og vann i butikken (B) for å hjelpe sultne og tørste dyr.',
   'Tips: Løping lager lyd. Rovdyr og krypskyttere kan høre deg!',
-  'Tips: I sumpen lurer krokodillene i vannet – de kan også gå på land.',
-  'Tips: På de tropiske øyene trenger du båt for å komme deg rundt.',
-  'Tips: I byen blokkerer husene sikten. Bruk dem til å snike deg forbi smuglerne.',
-  'Tips: Løver og hyener jakter på savannen – hold avstand eller kjør bil.',
+  // Tips om biomer som bare finnes på én bane
+  { text: 'Tips: I sumpen lurer krokodillene i vannet – de kan også gå på land.', levels: [2] },
+  { text: 'Tips: På de tropiske øyene trenger du båt for å komme deg rundt.', levels: [2] },
+  { text: 'Tips: I byen blokkerer husene sikten. Bruk dem til å snike deg forbi smuglerne.', levels: [3] },
+  { text: 'Tips: Løver og hyener jakter på savannen – hold avstand eller kjør bil.', levels: [3] },
+  { text: 'Tips: Lander du helikopteret på et hustak, får du utsikt over hele byen.', levels: [3] },
+  { text: 'Tips: Isbjørner og ulver holder til i isverdenen nord for skogen.', levels: [1] },
   'Tips: Du kan velge fritt mellom tre baner i startmenyen.',
 ];
 
@@ -97,7 +100,7 @@ class Game {
     this.onResize();
     this.input.on('keydown', (e) => this.onKey(e));
     this.input.on('lockchange', (locked) => this.onLockChange(locked));
-    this.menus.setContinueVisible(!!loadSave());
+    this.menus.setContinueVisible(loadSave());
     this.menus.showOnly('menu');
     window.__game = this;
     this.renderer.setAnimationLoop(() => this.loop());
@@ -151,7 +154,9 @@ class Game {
     this.hud.show(false);
     this.hud.clearTransient();
     this.menus.showOnly('loading');
-    const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+    const tips = TIPS.filter((t) => typeof t === 'string' || t.levels.includes(levelId));
+    const t = tips[Math.floor(Math.random() * tips.length)];
+    const tip = typeof t === 'string' ? t : t.text;
     this.menus.setLoading(0.02, 'Genererer verden …', tip);
     await nextFrame();
     this._difficulty = DIFFICULTY[diffKey] || DIFFICULTY.medium;
@@ -304,7 +309,7 @@ class Game {
     this.input.unlock();
     this.audio.stopEngine();
     this.hud.show(false);
-    this.menus.setContinueVisible(!!loadSave());
+    this.menus.setContinueVisible(loadSave());
     this.menus.showOnly('menu');
   }
 

@@ -6,6 +6,8 @@ import { lerp, smoothstep } from '../utils/math.js';
 import { getLevel } from '../levels/levels.js';
 import { BIOMES } from '../levels/levels.js';
 
+const DEFAULT_MAP_WATER = [[80, 160, 200], [22, 70, 140]];
+
 const CELL = WORLD.cell;
 const CACHE_BITS = 18;
 const CACHE_SIZE = 1 << CACHE_BITS;
@@ -192,12 +194,15 @@ export class WorldGen {
   /** Enkel kartfarge (sRGB 0-255) brukt på minikart og verdenskart. */
   mapColor(x, z, h, shade, out) {
     if (h < this.water) {
-      const mw = this.biomeDef(x, z).mapWater;
+      // Vannfargen blandes etter biomvektene, som landfargen (ingen skarpe skiller ved biomgrensene)
       const k = smoothstep(0, -12, h);
-      if (mw) {
-        out[0] = lerp(mw[0][0], mw[1][0], k); out[1] = lerp(mw[0][1], mw[1][1], k); out[2] = lerp(mw[0][2], mw[1][2], k);
-      } else {
-        out[0] = lerp(80, 22, k); out[1] = lerp(160, 70, k); out[2] = lerp(200, 140, k);
+      const w = this.biomeWeights(x, z);
+      out[0] = out[1] = out[2] = 0;
+      for (let i = 0; i < 3; i++) {
+        const wi = w[i];
+        if (wi <= 0.0001) continue;
+        const mw = this.bands[i].mapWater || DEFAULT_MAP_WATER;
+        for (let j = 0; j < 3; j++) out[j] += lerp(mw[0][j], mw[1][j], k) * wi;
       }
       return out;
     }

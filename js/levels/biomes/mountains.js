@@ -61,21 +61,22 @@ const ALPINE = [
   ['mountains_dwarfBirch', 0.32], ['mountains_boulder', 0.26], ['mountains_scree', 0.24], ['mountains_juniper', 0.12],
   ['mountains_cairn', 0.06],
 ];
-// Bratt terreng: fjellnabber og ur
-const STEEP = [['mountains_crag', 0.45], ['mountains_scree', 0.4], ['mountains_boulder', 0.15]];
+// Bratt terreng: fjellnabber og steinblokker (ura er flat og ligger bare på slakt terreng, ellers svever den)
+const STEEP = [['mountains_crag', 0.55], ['mountains_boulder', 0.45]];
 
 // Kollisjon, dekning, krone og skalering per type
 const VEG = {
   // Gjenbrukt fra bane 1 (kopiert nøyaktig fra forest.js)
   pine: { radius: 0.45, cover: 1.4, foliage: { r: 2.1, y0: 1.6, y1: 8.6 } },
   snowPine: { radius: 0.45, cover: 1.4, foliage: { r: 2.1, y0: 1.6, y1: 8.6 } },
+  rock2: { radius: 0.95, cover: 1.6, rock: true },
   // Egne typer
   mountains_birch: { radius: 0.22, cover: 1.0, foliage: { r: 1.7, y0: 2.2, y1: 4.8 }, height: 4.8, scale: [0.75, 1.25] },
   mountains_dwarfBirch: { near: true, radius: 0, cover: 1.2, height: 0.6, scale: [0.8, 1.5] },
   mountains_juniper: { radius: 0, cover: 1.1, height: 1.8, scale: [0.7, 1.3] },
   mountains_boulder: { radius: 1.15, cover: 1.8, static: true, height: 1.5, sink: 0.25, scale: [0.6, 2.0, 1.6] },
   mountains_snowBoulder: { radius: 1.15, cover: 1.8, static: true, height: 1.5, sink: 0.25, scale: [0.6, 1.9, 1.6] },
-  mountains_crag: { radius: 1.4, cover: 2.0, static: true, height: 4.2, sink: 0.5, scale: [0.7, 1.5] },
+  mountains_crag: { radius: 1.4, cover: 2.0, static: true, height: 4.2, sink: 0.9, scale: [0.7, 1.5] },
   mountains_scree: { radius: 0, cover: 0.8, static: true, noShadow: true, height: 0.6, sink: 0.12, scale: [0.8, 1.5] },
   mountains_cairn: { radius: 0.55, cover: 0.8, static: true, height: 1.7, sink: 0.05, scale: [0.85, 1.15] },
   mountains_streamStones: { near: true, radius: 0, cover: 0, static: true, height: 0.4, sink: 0.08, scale: [0.8, 1.5] },
@@ -179,16 +180,23 @@ export default {
 
   /** Velg vegetasjon på land: barskog i liene, eng i dalene, snaufjell, ur og klipper. */
   pick(p, r2, r3) {
+    // Kampesteinene har små sidesteiner som ville sveve i bratt terreng – bruk en hel stein der
+    const t = this.pickRaw(p, r2, r3);
+    return (t === 'mountains_boulder' || t === 'mountains_snowBoulder') && p.ny < 0.85 ? 'rock2' : t;
+  },
+
+  pickRaw(p, r2, r3) {
     const { h, ny, x, z } = p;
     // Bratte vegger og klipper: fjellnabber og ur
     if (ny < 0.72) {
-      if (r2 > (ny < 0.5 ? 0.12 : 0.3)) return null;
-      return pickByTable(r3, STEEP);
+      // Nesten loddrette vegger står nakne – der ville alt sveve
+      if (ny < 0.45 || r2 > (ny < 0.55 ? 0.12 : 0.3)) return null;
+      return ny < 0.55 ? 'mountains_crag' : pickByTable(r3, STEEP);
     }
     // Snø: glisne, snødekte steinblokker
     if (h > SNOW + 2) {
       if (r2 > 0.12) return null;
-      return r3 < 0.75 ? 'mountains_snowBoulder' : 'mountains_scree';
+      return r3 < 0.75 || ny < 0.95 ? 'mountains_snowBoulder' : 'mountains_scree';
     }
     // Ved vannkanten: bekkesteiner, dvergbjørk og en og annen fjellbjørk
     if (h < 2.2) {
@@ -199,7 +207,8 @@ export default {
     if (h > 70) {
       if (r2 > 0.32) return null;
       if (ny > 0.95 && r3 < 0.08) return 'mountains_cairn';
-      return pickByTable(r3, ALPINE);
+      const t = pickByTable(r3, ALPINE);
+      return t === 'mountains_scree' && ny < 0.95 ? 'mountains_boulder' : t;
     }
     // Varder på fjellviddene
     if (h > 38 && ny > 0.96 && r2 < 0.012) return 'mountains_cairn';

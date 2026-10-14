@@ -115,8 +115,17 @@ const VEG = {
 const CARS = ['city_car', 'city_car', 'city_car2', 'city_car2', 'city_van'];
 
 /** Plasser en liten gjenstand hvis punktet ligger i byen og på tørt land. */
+// Flate gatebiter (stive plater på opptil 7,8 m) – må ligge på flat grunn, ellers står de på skrå mot kystskråningen
+const FLAT = new Set(['city_walk', 'city_corner', 'city_median', 'city_dash', 'city_zebra']);
+
 function put(api, type, x, z, s = 1, ry = 0) {
-  if (api.weightAt(x, z) < MIN_W || api.gen.groundHeight(x, z) < 0.9) return null;
+  const h = api.gen.groundHeight(x, z);
+  if (api.weightAt(x, z) < MIN_W || h < 0.9) return null;
+  if (FLAT.has(type)) {
+    for (const [dx, dz] of [[3.6, 0], [-3.6, 0], [0, 3.6], [0, -3.6]]) {
+      if (Math.abs(api.gen.groundHeight(x + dx, z + dz) - h) > 0.12) return null;
+    }
+  }
   return api.emit(type, x, z, s, ry);
 }
 

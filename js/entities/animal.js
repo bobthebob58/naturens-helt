@@ -123,7 +123,7 @@ export class Animal {
       this.swimming = WATER - gh > (this.sp.swimDepth ?? 0.7);
       const target = this.swimming ? WATER - (this.sp.swimSink ?? 0.3) : gh;
       this.pos.y = Math.abs(this.pos.y - target) > 3 ? target : damp(this.pos.y, target, 6, dt);
-      if (!this.swimming && dToPlayer < 100) g.features.resolve(this.pos, this.hitRadius * 0.6, g.extraColliders);
+      if (dToPlayer < 100) g.features.resolve(this.pos, this.hitRadius * 0.6, g.extraColliders);
     } else {
       if (dToPlayer < 100) g.features.resolve(this.pos, this.hitRadius * 0.6, g.extraColliders);
       snapToGround(this, g, dt);
@@ -249,6 +249,7 @@ export class Animal {
       const r = 6 + Math.random() * (this.aquatic ? 35 : 28);
       const x = this.home.x + Math.cos(a) * r, z = this.home.z + Math.sin(a) * r;
       const depth = g.gen.waterDepth(x, z);
+      if (!this.aquatic && g.features.blockedAt(x, z, this.hitRadius)) continue; // ikke inne i hus, trær eller steiner
       if (this.aquatic ? depth > 2.5 : this.amphibious ? depth < 4 : depth < 0.3) {
         this.target = new THREE.Vector3(x, 0, z);
         return;
@@ -288,8 +289,12 @@ export class Animal {
         anim = 'eat';
       } else {
         if (!this.target) {
-          const a = Math.random() * Math.PI * 2;
-          this.target = new THREE.Vector3(this.home.x + Math.cos(a) * 6, 0, this.home.z + Math.sin(a) * 6);
+          for (let i = 0; i < 5 && !this.target; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const x = this.home.x + Math.cos(a) * 6, z = this.home.z + Math.sin(a) * 6;
+            if (!g.features.blockedAt(x, z, this.hitRadius)) this.target = new THREE.Vector3(x, 0, z);
+          }
+          if (!this.target) this.target = this.home.clone();
         }
         const left = moveToward(this, g, this.target.x, this.target.z, 1.0, dt, 3, this.amphibious);
         speed = this.curSpeed;

@@ -197,10 +197,10 @@ export default {
         const gh = gen.groundHeight(x, z);
         if (weed) {
           if (gh > -0.25) continue;
-          api.emit('swamp_duckweed', x, z, 0.8 + r3 * 1.2, r4 * TAU, 0.025 + k * 0.004);
+          api.emit('swamp_duckweed', x, z, 0.8 + r3 * 1.2, r4 * TAU, 0.045 + k * 0.004);
         } else if (lilies) {
           if (gh > -0.3) continue;
-          api.emit('swamp_lily', x, z, 0.8 + r3 * 0.8, r4 * TAU, 0.03);
+          api.emit('swamp_lily', x, z, 0.8 + r3 * 0.8, r4 * TAU, 0.045);
         } else {
           if (gh > 0.8 || gh < -0.9) continue;
           const t = r5 < 0.55 ? 'swamp_reeds' : r5 < 0.9 ? 'swamp_cattail' : 'swamp_tussock';

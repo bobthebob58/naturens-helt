@@ -57,6 +57,17 @@ export class Poacher {
     return this.state !== 'surrender' && this.state !== 'arrested';
   }
 
+  /** Tilfeldig mål rundt et senter som ikke ligger inne i et hus, tre eller en stein. */
+  freeTarget(g, center, radius, randomRadius) {
+    for (let i = 0; i < 6; i++) {
+      const a = this.rng() * Math.PI * 2;
+      const r = randomRadius ? this.rng() * radius : radius;
+      const x = center.x + Math.cos(a) * r, z = center.z + Math.sin(a) * r;
+      if (!g.features.blockedAt(x, z, 0.6)) return new THREE.Vector3(x, 0, z);
+    }
+    return this.home.clone();
+  }
+
   isUnaware() {
     return this.state === 'patrol' || (this.state === 'suspicious' && this.awareness < 0.7) || this.state === 'search';
   }
@@ -155,11 +166,7 @@ export class Poacher {
           }
           this.heading = dampAngle(this.heading, this.lookDir ?? this.heading, 2, dt);
         } else {
-          if (!this.target) {
-            const a = this.rng() * Math.PI * 2;
-            const r = this.rng() * this.homeRadius;
-            this.target = new THREE.Vector3(this.home.x + Math.cos(a) * r, 0, this.home.z + Math.sin(a) * r);
-          }
+          if (!this.target) this.target = this.freeTarget(g, this.home, this.homeRadius, true);
           const left = moveToward(this, g, this.target.x, this.target.z, 1.5, dt, 4);
           speed = this.curSpeed;
           if (left < 0.6 || this.blocked > 1) {
@@ -248,10 +255,7 @@ export class Poacher {
           break;
         }
         this.searchT -= dt;
-        if (!this.target || this.blocked > 1) {
-          const a = this.rng() * Math.PI * 2;
-          this.target = new THREE.Vector3(this.lastSeen.x + Math.cos(a) * 15, 0, this.lastSeen.z + Math.sin(a) * 15);
-        }
+        if (!this.target || this.blocked > 1) this.target = this.freeTarget(g, this.lastSeen, 15, false);
         const left = moveToward(this, g, this.target.x, this.target.z, 2.4, dt, 5);
         speed = this.curSpeed;
         if (left < 1) this.target = null;

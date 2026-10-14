@@ -100,6 +100,11 @@ export class FeatureStore {
       for (const b of boxes) {
         if (Math.abs(it.x - b.x) < it.box.hw + b.box.hw - 0.05 && Math.abs(it.z - b.z) < it.box.hd + b.box.hd - 0.05) return true;
       }
+      // … eller en solid gjenstand som allerede står der (kasser o.l.)
+      for (const o of items) {
+        if (o.box || !(o.r > 0)) continue;
+        if (Math.abs(it.x - o.x) < it.box.hw + o.r && Math.abs(it.z - o.z) < it.box.hd + o.r) return true;
+      }
       return false;
     };
     const inBox = (x, z, pad) => {

@@ -91,17 +91,21 @@ iceSpike, grass, flowers, snowDrift, log`) – kopier da `vegInfo`-oppføringen 
 | `static: true` | Ingen vindsvai (bygninger, skilt, biler) |
 | `noShadow: true` | Kaster ikke skygge |
 | `near: true` | Tegnes bare innen én terrengbit fra spilleren (lav undervegetasjon – sparer ytelse; dekning gjelder likevel) |
-| `box: { hw, hd, h }` | Rektangulær kollisjon (halv bredde x, halv dybde z, høyde) for bygninger. Blokkerer sikt (`blocksSight: false` for å slå av). Roter kun i hele 90° |
+| `box: { hw, hd, h }` | Rektangulær kollisjon (halv bredde x, halv dybde z, høyde) for bygninger. Blokkerer sikt (`blocksSight: false` for å slå av). Taket (y + h) er gulv for helikoptre og spilleren. Roter kun i hele 90° |
 
 ### `structures(api)` (by)
 Kalles én gang per terrengbit før den tilfeldige vegetasjonen. `api = { cx, cz, x0, z0, size, gen, rng, weightAt(x, z),
 inClearing(x, z, pad), emit(type, x, z, s = 1, ry = 0, y = null) }`. `emit` plasserer en type (setter bakkehøyde selv)
-og hopper over punkter i lysninger eller oppå andre bokser. Oppgis `y`, trekkes typens `sink` fra den. Bruk et rutenett låst til verdenskoordinater slik at
+og hopper over punkter i lysninger, og bokser hvis fotavtrykk overlapper andre bokser eller solide gjenstander
+(solide gjenstander hoppes over inne i bokser). Oppgis `y`, trekkes typens `sink` fra den. Bruk et rutenett låst til verdenskoordinater slik at
 gater fortsetter sømløst over bitgrensene. Tilfeldig vegetasjon unngår automatisk boksene.
 
 ### Fauna
 `fauna.predators` er vektede rovdyr på land, `aquatic` er vannrovdyret (eller `null`), `friendly` er dyr som kan trenge
-mat/vann (oppdrag), `caged` er dyr krypskytterne holder i bur (bør være små/mellomstore).
+mat/vann (oppdrag), `caged` er dyr krypskytterne holder i bur (de skaleres ned etter sin faktiske utstrekning så de får plass).
+
+Flerdelte modeller (en stein med småsteiner rundt, en ur, et kratt av stammer) står flatt og roteres bare om y-aksen.
+I bratt terreng svever delene på nedsiden – velg en enkel modell der (`p.ny` er normalens y, 1 = flatt).
 
 ## Arter (`fauna.js`, `../models/fauna/*.js`)
 `export const SPECIES = { key: { name, definite, article, height, radius, habitat, stats, pack, createRig } }` –

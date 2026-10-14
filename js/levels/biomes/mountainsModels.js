@@ -3,7 +3,7 @@
 // Lavpolygon med vertex-farger (Lambert). Gran og snøgran gjenbrukes fra bane 1 (vegetation.js).
 // Pynten (gress/blomster) tegnes dobbeltsidig med samme normal på begge sider, så den trenger ingen bakside.
 import * as THREE from 'three';
-import { paint, xf, merge, jitter, shadeVariation, cone } from '../../models/geo.js';
+import { paint, xf, merge, jitter, shadeVariation } from '../../models/geo.js';
 import { jIco } from '../../models/vegetation.js';
 import { mulberry32 } from '../../utils/math.js';
 
@@ -99,6 +99,15 @@ function tube(a, b, r0, r1, seg, c0, c1 = c0) {
   g.applyQuaternion(_q);
   g.translate(a[0], a[1], a[2]);
   return g;
+}
+
+/**
+ * Lavpolygon løvklump: jitret dodekaeder (36 trekanter), eller ikosaeder (20 trekanter) med small = true.
+ * Litt oppskalert så den fyller omtrent like mye som en ikosaeder med detalj 1 (80 trekanter) med samme radius.
+ */
+function lump(r, color, amount, seed, t, small = false) {
+  const geo = small ? new THREE.IcosahedronGeometry(r * 1.1, 0) : new THREE.DodecahedronGeometry(r * 1.06, 0);
+  return xf(jitter(paint(geo, color), amount, seed), t);
 }
 
 // ---------- Stein ----------
@@ -228,7 +237,11 @@ function streamStones() {
 
 // ---------- Trær og busker ----------
 
-/** Fjellbjørk: lav, krokete bjørk med flere stammer fra roten, hvit never med svarte flekker og små, lyse kroner. */
+/**
+ * Fjellbjørk: lav, krokete bjørk med flere stammer fra roten, hvit never med svarte flekker og små, lyse kroner.
+ * Lavpolygon (ca. 430 trekanter, som bjørka i bane 1): toppklasen er et dodekaeder og sideklasene ikosaedre;
+ * kvistene inn til sideklasene er sløyfet (usynlige på spilleavstand), så klasene sitter litt tettere inntil stammen.
+ */
 function mountainBirch() {
   const rnd = mulberry32(13);
   const parts = [];
@@ -244,21 +257,22 @@ function mountainBirch() {
     ];
     const radii = [0.13, 0.1, 0.075, 0.04];
     for (let i = 0; i < 3; i++) {
-      // Hvit never med mørke ringer
-      parts.push(tube(pts[i], pts[i + 1], radii[i], radii[i + 1], 5, i === 0 ? 0x8f887c : BARK, BARK));
+      // Hvit never; den tynne toppen (mest skjult i kronen) er firkantet
+      parts.push(tube(pts[i], pts[i + 1], radii[i], radii[i + 1], i < 2 ? 5 : 4, i === 0 ? 0x8f887c : BARK, BARK));
+      if (i === 2) continue;
+      // Mørk ring midt på de to nederste leddene (samme antall sider som leddet, så den ligger rundt stammen)
       const m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, (pts[i][2] + pts[i + 1][2]) / 2];
       parts.push(tube(m, [m[0] + (pts[i + 1][0] - pts[i][0]) * 0.12, m[1] + (pts[i + 1][1] - pts[i][1]) * 0.12, m[2] + (pts[i + 1][2] - pts[i][2]) * 0.12],
         radii[i] * 1.06, radii[i + 1] * 1.06, 5, BARK_MARK));
     }
-    // Kvister og løvklaser langs den øvre delen
+    // Løvklaser langs den øvre delen
     const top = pts[3];
-    parts.push(jIco(0.8 + rnd() * 0.2, 1, BIRCH_LEAF[3], 0.3, ang * 10 + 1, { x: top[0], y: top[1] + 0.1, z: top[2], sy: 0.8 }));
+    parts.push(lump(0.8 + rnd() * 0.2, BIRCH_LEAF[3], 0.3, ang * 10 + 1, { x: top[0], y: top[1] + 0.1, z: top[2], sy: 0.8 }));
     for (let k = 0; k < 3; k++) {
       const a = ang + (k - 1) * 1.3 + rnd() * 0.4;
       const from = pts[2];
-      const tip = [from[0] + Math.cos(a) * 0.85, from[1] + 0.35 + rnd() * 0.5, from[2] + Math.sin(a) * 0.85];
-      parts.push(tube(from, tip, 0.04, 0.015, 3, BARK));
-      parts.push(jIco(0.48 + rnd() * 0.18, 1, BIRCH_LEAF[k % 3], 0.22, ang * 10 + k * 3 + 2, { x: tip[0], y: tip[1], z: tip[2], sy: 0.75 }));
+      const tip = [from[0] + Math.cos(a) * 0.8, from[1] + 0.35 + rnd() * 0.5, from[2] + Math.sin(a) * 0.8];
+      parts.push(lump(0.48 + rnd() * 0.18, BIRCH_LEAF[k % 3], 0.22, ang * 10 + k * 3 + 2, { x: tip[0], y: tip[1], z: tip[2], sy: 0.75 }, true));
     }
   }
   return shadeVariation(merge(parts), 0.06, 19);
@@ -282,13 +296,17 @@ function dwarfBirch() {
   return shadeVariation(merge(parts), 0.1, 7);
 }
 
-/** Einer: smal, tett og mørk blågrønn søylebusk med et par mindre skudd ved siden av. */
+/**
+ * Einer: smal, tett og mørk blågrønn søylebusk med et par mindre skudd ved siden av. De to høye søylene beholder
+ * runde ikosaedre (silhuetten), de små skuddene ved foten er dodekaedre.
+ */
 function juniper() {
-  const parts = [cone(0.07, 0.3, 4, 0x4a3a2c, { y: 0.1 })];
+  // Rotstubben står i bakken, så den trenger ingen bunn
+  const parts = [xf(paint(new THREE.ConeGeometry(0.07, 0.3, 4, 1, true), 0x4a3a2c), { y: 0.1 })];
   [[0, 0, 0.42, 0.95, 0], [0.05, 0.05, 0.3, 1.45, 0.05], [0.42, 0.2, 0.3, 0.55, -0.2], [-0.36, -0.26, 0.28, 0.5, 0.2], [0.12, -0.42, 0.24, 0.4, 0.15]]
     .forEach(([x, z, r, y, lean], i) => {
-      const sy = i < 2 ? 1.9 : 1.5;
-      parts.push(jIco(r, 1, JUNIPER[i % 3], r * 0.35, i * 3 + 5, { x, y, z, sy, rz: lean }));
+      const t = { x, y, z, sy: i < 2 ? 1.9 : 1.5, rz: lean };
+      parts.push(i < 2 ? jIco(r, 1, JUNIPER[i % 3], r * 0.35, i * 3 + 5, t) : lump(r, JUNIPER[i % 3], r * 0.35, i * 3 + 5, t));
     });
   return shadeVariation(merge(parts), 0.08, 3);
 }

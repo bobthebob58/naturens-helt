@@ -221,9 +221,33 @@ function mossStrand(x, y, z, len, r, color, seed) {
   return xf(g, { x, y: y - len / 2, z, rx: Math.PI, ry: seed });
 }
 
+/**
+ * Lavpolygon løvklump: jitret dodekaeder (36 trekanter), eller ikosaeder (20 trekanter) med small = true.
+ * Litt oppskalert så den fyller omtrent like mye som en ikosaeder med detalj 1 (80 trekanter) med samme radius.
+ */
+function lump(r, color, amount, seed, t, small = false) {
+  const geo = small ? new THREE.IcosahedronGeometry(r * 1.1, 0) : new THREE.DodecahedronGeometry(r * 1.06, 0);
+  return xf(jitter(paint(geo, color), amount, seed), t);
+}
+
+/** Liten oktaeder (8 trekanter) – blomsterhoder, knopper. */
+function octa(r, color, t) {
+  return xf(paint(new THREE.OctahedronGeometry(r, 0), color), t);
+}
+
+/**
+ * Kvadratisk lokk (2 trekanter) for et firesidet rør/kjegle med hjørneradius r (hjørnene treffer rørets hjørner).
+ * Vender opp, eller ned med down = true. Billigere enn sylinderens vifte-lokk (4 trekanter).
+ */
+function quadCap(r, color, t, down = false) {
+  const g = paint(new THREE.PlaneGeometry(r * Math.SQRT2, r * Math.SQRT2), color);
+  xf(g, { rz: Math.PI / 4, rx: down ? Math.PI / 2 : -Math.PI / 2 });
+  return xf(g, t);
+}
+
 /** Kjuke (halv soppskive) på siden av en stamme med sentrum (cx, cz) og radius R, i retning a (rad i xz-planet). */
 function shelfFungus(cx, y, cz, R, a, r, color) {
-  const g = paint(new THREE.CylinderGeometry(r, r * 0.9, r * 0.28, 7, 1, false, 0, Math.PI), color);
+  const g = paint(new THREE.CylinderGeometry(r, r * 0.9, r * 0.28, 4, 1, false, 0, Math.PI), color);
   return xf(g, { x: cx + Math.cos(a) * R * 0.85, y, z: cz + Math.sin(a) * R * 0.85, ry: -a });
 }
 
@@ -233,8 +257,8 @@ function shelfFungus(cx, y, cz, R, a, r, color) {
 function mangrove() {
   const rnd = mulberry32(17);
   const parts = [];
-  parts.push(...limb([[0, 0.6, 0], [0.04, 1.6, 0.02], [0.14, 3.0, 0.08], [0.22, 4.3, 0.06]], [0.12, 0.22, 0.18, 0.13], 6, MANG_BARK_D, MANG_BARK));
-  // Stylterøtter som buer ut fra stammen og ned i gjørma
+  parts.push(...limb([[0, 0.6, 0], [0.04, 1.6, 0.02], [0.14, 3.0, 0.08], [0.22, 4.3, 0.06]], [0.12, 0.22, 0.18, 0.13], 5, MANG_BARK_D, MANG_BARK));
+  // Stylterøtter som buer ut fra stammen og ned i gjørma (tynne – trekantet tverrsnitt holder)
   const N = 9;
   for (let i = 0; i < N; i++) {
     const a = (i / N) * TAU + (rnd() - 0.5) * 0.5;
@@ -244,19 +268,21 @@ function mangrove() {
     const up = 0.15 + rnd() * 0.3;
     const p = (k, y) => [ca * k, y, sa * k];
     parts.push(...limb([p(0.1, y0), p(R * 0.38, y0 + up), p(R * 0.8, y0 * 0.55 + 0.1), p(R, -0.45)],
-      [0.085, 0.075, 0.062, 0.055], 4, ROOT, ROOT_D));
+      [0.085, 0.075, 0.062, 0.055], 3, ROOT, ROOT_D));
   }
   const crown = [[0.3, 5.6, 0, 1.75], [1.5, 5.0, 0.6, 1.3], [-1.1, 5.2, -0.5, 1.35], [0.5, 6.3, -0.9, 1.15],
     [-0.5, 4.9, 1.2, 1.25], [1.1, 4.7, -1.2, 1.05]];
   for (const [x, y, z] of crown.slice(1)) {
-    parts.push(...limb([[0.2, 3.9, 0.06], [x * 0.65, y - 0.5, z * 0.65]], [0.1, 0.05], 5, MANG_BARK, MANG_BARK));
+    parts.push(...limb([[0.2, 3.9, 0.06], [x * 0.65, y - 0.5, z * 0.65]], [0.1, 0.05], 3, MANG_BARK, MANG_BARK));
   }
-  // Luftrøtter som henger rett ned fra greinene
+  // Luftrøtter som henger rett ned fra greinene (ett rett rør hver)
   for (const [x, z] of [[1.15, 0.45], [-0.85, -0.4], [-0.35, 0.9], [0.7, -0.85]]) {
-    parts.push(...limb([[x, 4.4, z], [x * 1.04, 2.1, z * 1.04], [x * 1.08, -0.35, z * 1.08]], [0.035, 0.03, 0.03], 3, ROOT, ROOT_D));
+    parts.push(tube([x, 4.4, z], [x * 1.08, -0.35, z * 1.08], 0.035, 0.03, 3, ROOT, ROOT_D));
   }
-  // Tett, mørk og blank krone
-  const leaves = crown.map(([x, y, z, r], i) => jIco(r, 1, MANG_LEAF[i % 4], r * 0.3, i * 13 + 3, { x, y, z, sy: 0.72 }));
+  // Tett, mørk og blank krone: hovedklumpen som dodekaeder, de mindre som litt større ikosaedre (holder kronebredden)
+  const leaves = crown.map(([x, y, z, r], i) =>
+    (i ? lump(r * 1.06, MANG_LEAF[i % 4], r * 0.3, i * 13 + 3, { x, y, z, sy: 0.72 }, true)
+      : lump(r, MANG_LEAF[0], r * 0.3, 3, { x, y, z, sy: 0.72 })));
   for (const l of leaves) shadeY(l, 4.0, 6.6, 0.82, 1.1);
   parts.push(...leaves);
   const g = merge(parts);
@@ -268,37 +294,40 @@ function mangrove() {
 function cypress() {
   const rnd = mulberry32(29);
   const parts = [];
-  // Utvidet, riflet stammefot (fra under bakken til 2,3 m)
-  const foot = new THREE.CylinderGeometry(1, 1, 2.6, 10, 4, true).toNonIndexed();
+  // Utvidet, riflet stammefot (fra under bakken til 2,3 m). Ringene ligger tettest nederst, der foten buer mest.
+  const foot = new THREE.CylinderGeometry(1, 1, 1, 10, 3, true).toNonIndexed();
   foot.deleteAttribute('uv');
   const p = foot.attributes.position;
+  const ringT = [0, 0.2, 0.5, 1];
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i) + 1.0, z = p.getZ(i);
+    const x = p.getX(i), z = p.getZ(i);
+    const t = ringT[Math.round((p.getY(i) + 0.5) * 3)];
+    const y = -0.3 + 2.6 * t;
     const a = Math.atan2(z, x);
-    const t = (y + 0.3) / 2.6;
     const R = (0.34 + 0.72 * Math.pow(1 - t, 2.4)) * (1 + 0.28 * Math.pow(1 - t, 1.5) * Math.cos(a * 5 + 0.4));
     p.setXYZ(i, Math.cos(a) * R, y, Math.sin(a) * R);
   }
   const footG = jitter(paint(foot, CYP_BARK), 0.05, 2);
   shadeY(footG, -0.3, 2.3, 0.75, 1);
   parts.push(footG);
-  parts.push(...limb([[0, 2.2, 0], [0.06, 7, 0.05], [0.1, 12.6, 0]], [0.34, 0.24, 0.12], 7, CYP_BARK, CYP_BARK_L));
+  parts.push(tube([0, 2.2, 0], [0.1, 12.6, 0], 0.34, 0.12, 6, CYP_BARK, CYP_BARK_L));
   // Sypressknær som stikker opp av gjørma
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * TAU + rnd() * 0.8, d = 1.4 + rnd() * 1.0, h = 0.35 + rnd() * 0.45;
-    const k = jitter(paint(new THREE.ConeGeometry(0.1 + rnd() * 0.07, h, 5, 1, true), CYP_BARK_D), 0.035, i + 4);
+    const k = jitter(paint(new THREE.ConeGeometry(0.1 + rnd() * 0.07, h, 4, 1, true), CYP_BARK_D), 0.035, i + 4);
     parts.push(xf(k, { x: Math.cos(a) * d, y: h / 2 - 0.15, z: Math.sin(a) * d }));
   }
-  // Flat, lagdelt krone
+  // Flat, lagdelt krone (de to minste, nederste lagene som ikosaedre)
   const crown = [[0, 12.8, 0, 2.2, 0.5], [1.9, 11.2, 0.6, 1.9, 0.48], [-1.7, 10.6, -0.7, 2.0, 0.46],
     [0.6, 9.6, -1.9, 1.7, 0.5], [-0.7, 9.0, 1.8, 1.8, 0.48], [2.3, 8.3, -0.6, 1.5, 0.5], [-2.2, 7.9, 0.5, 1.4, 0.5]];
   crown.forEach(([x, y, z, r, sy], i) => {
-    parts.push(...limb([[0.05, y - 0.7, 0.03], [x * 0.75, y - 0.25, z * 0.75]], [0.11, 0.05], 5, CYP_BARK, CYP_BARK_L));
-    const blob = jIco(r, 1, CYP_LEAF[i % 4], r * 0.32, i * 7 + 5, { x, y, z, sy });
+    // Toppen sitter rett på stammen og trenger ingen grein
+    if (i > 0) parts.push(tube([0.05, y - 0.7, 0.03], [x * 0.75, y - 0.25, z * 0.75], 0.11, 0.05, 3, CYP_BARK, CYP_BARK_L));
+    const blob = lump(r, CYP_LEAF[i % 4], r * 0.32, i * 7 + 5, { x, y, z, sy }, i >= 5);
     shadeY(blob, y - r * sy, y + r * sy, 0.8, 1.12);
     parts.push(blob);
     // Spansk mose under hvert kronelag
-    const n = i === 0 ? 3 : 5;
+    const n = i === 0 ? 2 : 3;
     for (let k = 0; k < n; k++) {
       const a = rnd() * TAU, d = r * (0.3 + rnd() * 0.55);
       const mx = x + Math.cos(a) * d, mz = z + Math.sin(a) * d;
@@ -311,13 +340,13 @@ function cypress() {
 /** Dødt tre: gråbleket stamme med knekt topp, nakne greiner og litt hengende mose. */
 function deadTree() {
   const parts = [];
-  parts.push(...limb([[0, -0.3, 0], [0.08, 2.6, 0.04], [0.02, 5.2, 0.18], [0.16, 7.6, 0.1]], [0.36, 0.26, 0.17, 0.09], 6, DEAD_D, DEAD_L));
-  parts.push(xf(jitter(paint(new THREE.ConeGeometry(0.09, 0.55, 5), DEAD_L), 0.05, 3), { x: 0.17, y: 7.85, z: 0.1, rz: -0.12 }));
+  parts.push(...limb([[0, -0.3, 0], [0.08, 2.6, 0.04], [0.02, 5.2, 0.18], [0.16, 7.6, 0.1]], [0.36, 0.26, 0.17, 0.09], 5, DEAD_D, DEAD_L));
+  parts.push(xf(jitter(paint(new THREE.ConeGeometry(0.09, 0.55, 5, 1, true), DEAD_L), 0.05, 3), { x: 0.17, y: 7.85, z: 0.1, rz: -0.12 }));
   const br = [[2.4, 0.3, 1.7, 2.0], [3.5, 2.5, 1.4, 1.9], [4.5, 4.4, 1.2, 1.7], [5.5, 1.0, 1.0, 1.4], [6.4, 3.4, 0.8, 1.1]];
   br.forEach(([y, a, len, rise], i) => {
     const ca = Math.cos(a), sa = Math.sin(a);
     const p0 = [0.06, y, 0.08], p1 = [ca * len * 0.55, y + rise * 0.45, sa * len * 0.55], p2 = [ca * len, y + rise, sa * len];
-    parts.push(...limb([p0, p1, p2], [0.085, 0.05, 0.018], 4, DEAD, DEAD_L));
+    parts.push(...limb([p0, p1, p2], [0.085, 0.05, 0.018], 3, DEAD, DEAD_L));
     parts.push(...limb([p1, [p1[0] + Math.cos(a + 0.9) * 0.6, p1[1] + 0.55, p1[2] + Math.sin(a + 0.9) * 0.6]], [0.035, 0.012], 3, DEAD, DEAD_L));
     parts.push(mossStrand(p1[0], p1[1] - 0.05, p1[2], 1.0 + (i % 3) * 0.4, 0.14, SPANISH_MOSS[i % 3], i + 21));
   });
@@ -329,13 +358,13 @@ function deadTree() {
 /** Knekt, lav stamme (står ofte ute i vannet) med splintret topp og kjuker. */
 function snag() {
   const parts = [];
-  parts.push(...limb([[0, -0.4, 0], [0.14, 1.8, 0.05], [0.34, 3.6, 0.1]], [0.38, 0.31, 0.25], 7, DEAD_D, DEAD));
+  parts.push(...limb([[0, -0.4, 0], [0.14, 1.8, 0.05], [0.34, 3.6, 0.1]], [0.38, 0.31, 0.25], 6, DEAD_D, DEAD));
   // Lukk toppen med en lys bruddflate og noen splinter
-  parts.push(xf(jitter(paint(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 7), WOOD), 0.05, 6), { x: 0.34, y: 3.6, z: 0.1, rz: -0.1 }));
+  parts.push(xf(jitter(paint(new THREE.CylinderGeometry(0.25, 0.25, 0.08, 6), WOOD), 0.05, 6), { x: 0.34, y: 3.6, z: 0.1, rz: -0.1 }));
   [[0.12, 0.06, 0.9, 0.1], [-0.14, 0.1, 0.6, -0.2], [0.03, -0.16, 0.7, 0.3]].forEach(([dx, dz, h, t], i) => {
-    parts.push(xf(paint(new THREE.ConeGeometry(0.075, h, 4), i ? DEAD_L : WOOD), { x: 0.34 + dx, y: 3.6 + h / 2, z: 0.1 + dz, rz: t, rx: dz }));
+    parts.push(xf(paint(new THREE.ConeGeometry(0.075, h, 4, 1, true), i ? DEAD_L : WOOD), { x: 0.34 + dx, y: 3.6 + h / 2, z: 0.1 + dz, rz: t, rx: dz }));
   });
-  parts.push(...limb([[0.22, 2.4, 0.05], [0.95, 3.0, 0.4]], [0.09, 0.045], 4, DEAD, DEAD_L));
+  parts.push(tube([0.22, 2.4, 0.05], [0.95, 3.0, 0.4], 0.09, 0.045, 3, DEAD, DEAD_L));
   parts.push(shelfFungus(0.13, 1.6, 0.04, 0.32, 0.5, 0.22, FUNGUS[0]), shelfFungus(0.2, 2.3, 0.07, 0.3, 2.8, 0.17, FUNGUS[1]));
   const g = merge(parts);
   shadeY(g, -0.4, 1.2, 0.55, 1);
@@ -350,7 +379,7 @@ function stump() {
   const parts = [body];
   for (let i = 0; i < 4; i++) {
     const a = i * 1.7 + 0.3;
-    parts.push(xf(paint(new THREE.ConeGeometry(0.07, 0.35 + (i % 2) * 0.2, 4), i % 2 ? DEAD_L : WOOD),
+    parts.push(xf(paint(new THREE.ConeGeometry(0.07, 0.35 + (i % 2) * 0.2, 4, 1, true), i % 2 ? DEAD_L : WOOD),
       { x: Math.cos(a) * 0.24, y: 1.1, z: Math.sin(a) * 0.24, rz: -Math.cos(a) * 0.25, rx: Math.sin(a) * 0.25 }));
   }
   parts.push(shelfFungus(0, 0.55, 0, 0.44, 0.1, 0.2, FUNGUS[0]), shelfFungus(0, 0.8, 0, 0.4, 1.5, 0.16, FUNGUS[1]),
@@ -366,7 +395,7 @@ function swampLog() {
   xf(body, { y: 0.22, rz: Math.PI / 2 });
   recolorFaces(body, 6, (ny, nx, r) => (Math.abs(nx) > 0.85 ? WOOD : ny > 0.4 ? (r < 0.55 ? MOSS : MOSS_L) : null));
   const parts = [body];
-  parts.push(...limb([[0.6, 0.35, 0.1], [1.0, 0.75, 0.55]], [0.07, 0.03], 4, DEAD, DEAD_L));
+  parts.push(tube([0.6, 0.35, 0.1], [1.0, 0.75, 0.55], 0.07, 0.03, 3, DEAD, DEAD_L));
   parts.push(shelfFungus(-0.8, 0.22, 0, 0.29, Math.PI / 2, 0.15, FUNGUS[0]));
   return shadeVariation(merge(parts), 0.05, 23);
 }
@@ -378,9 +407,9 @@ function swampBush() {
   const greens = [0x3a5a2c, 0x446631, 0x355228, 0x4a6a34];
   const parts = [];
   [[0, 0.75, 0, 0.8], [0.62, 0.55, 0.25, 0.62], [-0.55, 0.6, -0.2, 0.66], [0.15, 0.58, -0.62, 0.6], [-0.2, 1.1, 0.3, 0.55]]
-    .forEach(([x, y, z, r], i) => parts.push(jIco(r, 1, greens[i % 4], r * 0.35, i * 5 + 2, { x, y, z, sy: 0.85 })));
+    .forEach(([x, y, z, r], i) => parts.push(lump(r, greens[i % 4], r * 0.35, i * 5 + 2, { x, y, z, sy: 0.85 })));
   const flowers = [[0.5, 1.15, 0.45], [-0.6, 1.0, 0.35], [0.1, 1.55, 0.1], [0.75, 0.75, -0.4], [-0.4, 0.95, -0.65], [-0.75, 0.55, 0.3]];
-  flowers.forEach(([x, y, z], i) => parts.push(ico(0.08, 0, i % 3 ? 0xece6d0 : 0xd8d2b8, { x, y, z })));
+  flowers.forEach(([x, y, z], i) => parts.push(octa(0.1, i % 3 ? 0xece6d0 : 0xd8d2b8, { x, y, z, ry: i })));
   const g = merge(parts);
   shadeY(g, 0, 1.4, 0.7, 1.08);
   return shadeVariation(g, 0.07, 29);
@@ -393,8 +422,10 @@ function reeds() {
   for (let i = 0; i < 16; i++) {
     const a = rnd() * TAU, d = rnd() * 0.38;
     const dead = rnd() < 0.25;
-    blade(B, [Math.cos(a) * d, -0.15, Math.sin(a) * d], a + (rnd() - 0.5) * 0.7, 1.3 + rnd() * 1.0, 0.15 + rnd() * 0.45,
-      0.055 + rnd() * 0.03, 2, dead ? STRAW_D : REED_BASE, dead ? STRAW : REED_TIP);
+    const az = a + (rnd() - 0.5) * 0.7, h = 1.3 + rnd() * 1.0, lean = 0.15 + rnd() * 0.45, w = 0.055 + rnd() * 0.03;
+    // Bare strå som lener mye trenger et knekkpunkt; resten er rette (buen synes knapt)
+    blade(B, [Math.cos(a) * d, -0.15, Math.sin(a) * d], az, h, lean, w, lean > 0.45 ? 2 : 1,
+      dead ? STRAW_D : REED_BASE, dead ? STRAW : REED_TIP);
   }
   const g = liftNormals(rawGeo(B), 0.5);
   const parts = [g];
@@ -406,7 +437,9 @@ function reeds() {
     parts.push(tube([Math.cos(a) * d, -0.1, Math.sin(a) * d], top, 0.018, 0.012, 3, REED_BASE, STRAW));
     // Smal, ujevn dusk som lener seg litt utover fra stengeltoppen
     const tilt = 0.45, len = 0.5;
-    parts.push(xf(jitter(paint(new THREE.ConeGeometry(0.06, len, 4), PLUME), 0.025, i + 7), {
+    // Duskene henger over øyehøyde, så bunnen lukkes med et to-trekants lokk (jitres sammen med kjeglen, så kantene følger)
+    const plume = merge([paint(new THREE.ConeGeometry(0.06, len, 4, 1, true), PLUME), quadCap(0.06, PLUME, { y: -len / 2 }, true)]);
+    parts.push(xf(jitter(plume, 0.025, i + 7), {
       x: top[0] + Math.cos(a) * Math.sin(tilt) * len * 0.5, y: top[1] + Math.cos(tilt) * len * 0.5 - 0.06,
       z: top[2] + Math.sin(a) * Math.sin(tilt) * len * 0.5, rz: -Math.cos(a) * tilt, rx: Math.sin(a) * tilt,
     }));
@@ -420,8 +453,8 @@ function cattail() {
   const B = newBuf();
   for (let i = 0; i < 11; i++) {
     const a = rnd() * TAU, d = rnd() * 0.25;
-    blade(B, [Math.cos(a) * d, -0.15, Math.sin(a) * d], a, 1.2 + rnd() * 0.8, 0.3 + rnd() * 0.5, 0.075 + rnd() * 0.03, 2,
-      CATTAIL_LEAF, rnd() < 0.3 ? STRAW : CATTAIL_TIP);
+    const h = 1.2 + rnd() * 0.8, lean = 0.3 + rnd() * 0.5, w = 0.075 + rnd() * 0.03, tip = rnd() < 0.3 ? STRAW : CATTAIL_TIP;
+    blade(B, [Math.cos(a) * d, -0.15, Math.sin(a) * d], a, h, lean, w, lean > 0.55 ? 2 : 1, CATTAIL_LEAF, tip);
   }
   const parts = [liftNormals(rawGeo(B), 0.5)];
   for (let i = 0; i < 5; i++) {
@@ -430,8 +463,11 @@ function cattail() {
     const bx = Math.cos(a) * d, bz = Math.sin(a) * d;
     const tx = bx + Math.cos(a) * 0.12, tz = bz + Math.sin(a) * 0.12;
     parts.push(tube([bx, -0.1, bz], [tx, h, tz], 0.02, 0.014, 3, CATTAIL_LEAF, CATTAIL_TIP));
-    parts.push(xf(paint(new THREE.CylinderGeometry(0.052, 0.058, 0.34, 5), CATTAIL_HEAD), { x: tx, y: h - 0.3, z: tz }));
-    parts.push(xf(paint(new THREE.ConeGeometry(0.013, 0.28, 3), STRAW_D), { x: tx, y: h + 0.01, z: tz }));
+    // Kolbe: firesidet rør med to-trekants lokk i begge ender (kolbene står i øyehøyde, så åpne ender synes)
+    parts.push(xf(paint(new THREE.CylinderGeometry(0.052, 0.058, 0.34, 4, 1, true), CATTAIL_HEAD), { x: tx, y: h - 0.3, z: tz }));
+    parts.push(quadCap(0.052, CATTAIL_HEAD, { x: tx, y: h - 0.13, z: tz }), quadCap(0.058, CATTAIL_HEAD, { x: tx, y: h - 0.47, z: tz }, true));
+    // Spissen uten endeflate (bunnen står inne i kolba)
+    parts.push(xf(paint(new THREE.ConeGeometry(0.013, 0.28, 3, 1, true), STRAW_D), { x: tx, y: h + 0.01, z: tz }));
   }
   return merge(parts);
 }
@@ -443,7 +479,7 @@ function lily() {
   const edge = new THREE.Color(PAD_EDGE);
   const pads = [[0, 0, 0.5], [0.8, 0.3, 0.38], [-0.62, 0.45, 0.42], [0.2, -0.8, 0.35], [-0.5, -0.6, 0.3], [1.0, -0.55, 0.27], [-1.05, -0.1, 0.24]];
   pads.forEach(([x, z, r], i) => {
-    const notch = rnd() * TAU, segs = 9, gap = 0.55;
+    const notch = rnd() * TAU, segs = r > 0.45 ? 8 : r > 0.36 ? 7 : r > 0.28 ? 6 : 5, gap = 0.55;
     const c = new THREE.Color(PADS[i % 3]);
     const ce = c.clone().lerp(edge, 0.45);
     const y = 0.004 * i;
@@ -456,7 +492,7 @@ function lily() {
   const white = new THREE.Color(0xf4f1ec), pink = new THREE.Color(0xf0b4c8), base = new THREE.Color(0xe8e0c8);
   const fx = 0.12, fz = 0.05;
   for (let layer = 0; layer < 2; layer++) {
-    const n = layer ? 6 : 8, len = layer ? 0.17 : 0.26, rise = layer ? 0.17 : 0.1, y0 = 0.03 + layer * 0.02;
+    const n = layer ? 5 : 7, len = layer ? 0.17 : 0.26, rise = layer ? 0.17 : 0.1, y0 = 0.03 + layer * 0.02;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + layer * 0.3;
       const tip = [fx + Math.cos(a) * len, y0 + rise, fz + Math.sin(a) * len];
@@ -466,8 +502,8 @@ function lily() {
     }
   }
   const parts = [liftNormals(rawGeo(B), 0.3)];
-  parts.push(ico(0.06, 0, 0xf2c63a, { x: fx, y: 0.08, z: fz }));
-  parts.push(ico(0.07, 0, 0xe89ab6, { x: -0.6, y: 0.12, z: 0.42, sy: 1.7 }));
+  parts.push(octa(0.072, 0xf2c63a, { x: fx, y: 0.08, z: fz }));
+  parts.push(octa(0.08, 0xe89ab6, { x: -0.6, y: 0.12, z: 0.42, sy: 1.3, ry: 0.4 }));
   return merge(parts);
 }
 

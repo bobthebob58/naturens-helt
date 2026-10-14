@@ -9,6 +9,9 @@ import { lerp, mulberry32 } from '../../utils/math.js';
 const _ca = new THREE.Color();
 const _cb = new THREE.Color();
 
+/** Oktaeder (8 trekanter) – billig klump for nøtter og bladfeste. */
+const oct = (r, color, t) => xf(paint(new THREE.OctahedronGeometry(r, 0), color), t);
+
 /** Åpen sylinder (uten lokk) – sparer trekanter på stammer og greiner. */
 function tube(rt, rb, h, seg, color, t) {
   return xf(paint(new THREE.CylinderGeometry(rt, rb, h, seg, 1, true), color), t);
@@ -71,8 +74,11 @@ function frond({ len = 3.2, wid = 0.6, lift = 0.5, droop = 1.6, seg = 7, col = 0
   return triGeo(pos, cols, true);
 }
 
-/** Smalt, langt blad (pandanus, store tropiske blader). Langs +Z, dobbeltsidig. */
-function strip({ len = 2, wid = 0.14, lift = 0.6, droop = 1.2, seg = 3, col = 0x4a7a3a, tip = 0x7aa64a, round = false }) {
+/**
+ * Smalt, langt blad (pandanus, store tropiske blader). Langs +Z, dobbeltsidig. Spissen samles i ett punkt;
+ * `flat` dropper V-folden (halvparten av trekantene), `stalk` lar også bladfoten møtes i ett punkt.
+ */
+function strip({ len = 2, wid = 0.14, lift = 0.6, droop = 1.2, seg = 3, col = 0x4a7a3a, tip = 0x7aa64a, round = false, flat = false, stalk = false }) {
   const pos = [], cols = [];
   const P = [];
   let y = 0, z = 0, a = lift;
@@ -88,6 +94,7 @@ function strip({ len = 2, wid = 0.14, lift = 0.6, droop = 1.2, seg = 3, col = 0x
   // Bredde per punkt: spiss i enden (round = bredest på midten, som et stort tropisk blad)
   const W = P.map((_, i) => {
     const t = i / seg;
+    if (i === seg || (stalk && i === 0)) return 0;
     return round ? wid * Math.sin(Math.PI * Math.min(0.97, 0.15 + t * 0.85)) : wid * (1 - t * 0.92);
   });
   for (let i = 0; i < seg; i++) {
@@ -96,16 +103,32 @@ function strip({ len = 2, wid = 0.14, lift = 0.6, droop = 1.2, seg = 3, col = 0x
     const k0 = i / seg, k1 = (i + 1) / seg;
     const c0 = [lerp(_ca.r, _cb.r, k0), lerp(_ca.g, _cb.g, k0), lerp(_ca.b, _cb.b, k0)];
     const c1 = [lerp(_ca.r, _cb.r, k1), lerp(_ca.g, _cb.g, k1), lerp(_ca.b, _cb.b, k1)];
+    if (flat) {
+      // Flatt blad: ett firkantfelt per ledd (én trekant der bredden er null)
+      if (w0 > 0) {
+        pos.push(-w0, y0, z0, w1 > 0 ? -w1 : 0, y1, z1, w0, y0, z0);
+        cols.push(...c0, ...c1, ...c0);
+      }
+      if (w1 > 0) {
+        pos.push(w0, y0, z0, -w1, y1, z1, w1, y1, z1);
+        cols.push(...c0, ...c1, ...c1);
+      }
+      continue;
+    }
     // Litt V-form: kantene ligger lavere enn midtribben
     const d0 = w0 * 0.25, d1 = w1 * 0.25;
-    pos.push(-w0, y0 - d0, z0, 0, y1, z1, 0, y0, z0);
-    cols.push(...c0, ...c1, ...c0);
-    pos.push(-w0, y0 - d0, z0, -w1, y1 - d1, z1, 0, y1, z1);
-    cols.push(...c0, ...c1, ...c1);
-    pos.push(0, y0, z0, 0, y1, z1, w0, y0 - d0, z0);
-    cols.push(...c0, ...c1, ...c0);
-    pos.push(w0, y0 - d0, z0, 0, y1, z1, w1, y1 - d1, z1);
-    cols.push(...c0, ...c1, ...c1);
+    if (w0 > 0) {
+      pos.push(-w0, y0 - d0, z0, 0, y1, z1, 0, y0, z0);
+      cols.push(...c0, ...c1, ...c0);
+      pos.push(0, y0, z0, 0, y1, z1, w0, y0 - d0, z0);
+      cols.push(...c0, ...c1, ...c0);
+    }
+    if (w1 > 0) {
+      pos.push(-w0, y0 - d0, z0, -w1, y1 - d1, z1, 0, y1, z1);
+      cols.push(...c0, ...c1, ...c1);
+      pos.push(w0, y0 - d0, z0, 0, y1, z1, w1, y1 - d1, z1);
+      cols.push(...c0, ...c1, ...c1);
+    }
   }
   return triGeo(pos, cols, true);
 }
@@ -181,25 +204,26 @@ function blades({ n = 9, h = 0.6, hVar = 0.3, spread = 0.25, lean = 0.2, width =
 /**
  * Kokospalme. Stammen bygges av ledd der helningen endres litt for hvert ledd
  * (tiltStep < 0 gir en stamme som lener seg ut og bøyer seg opp igjen mot kronen).
+ * rad = sider på stammen, fseg = ledd per palmeblad; foot/crown/withered slår av rotfot, bladfeste og visnet blad.
  */
-function coconutPalm({ segs = 9, segLen = 1, tilt0 = 0.05, tiltStep = 0.025, r0 = 0.22, r1 = 0.13, fronds = 10, flen = 3.3, seed = 1, nuts = 4 }) {
+function coconutPalm({ segs = 9, segLen = 1, tilt0 = 0.05, tiltStep = 0.025, r0 = 0.22, r1 = 0.13, fronds = 10, flen = 3.3, seed = 1, nuts = 4, rad = 5, fseg = 5, foot = true, crown = true, withered = true }) {
   const rng = mulberry32(seed);
   const parts = [];
   const bark = [0x8c6e4c, 0x7a5e3e];
   // Rotfot
-  parts.push(tube(r0 * 1.05, r0 * 1.7, 0.5, 7, 0x6e5436, { y: 0.2 }));
+  if (foot) parts.push(tube(r0 * 1.05, r0 * 1.7, 0.5, 6, 0x6e5436, { y: 0.2 }));
   let x = 0, y = 0.05, tilt = tilt0;
   for (let i = 0; i < segs; i++) {
     const rb = lerp(r0, r1, i / segs), rt = lerp(r0, r1, (i + 1) / segs);
     const dx = Math.sin(tilt) * segLen, dy = Math.cos(tilt) * segLen;
     // Ringene: hvert ledd er litt tykkere nederst
-    parts.push(tube(rt, rb * 1.1, segLen * 1.06, 6, bark[i % 2], { x: x + dx / 2, y: y + dy / 2, rz: -tilt }));
+    parts.push(tube(rt, rb * 1.1, segLen * 1.06, rad, bark[i % 2], { x: x + dx / 2, y: y + dy / 2, rz: -tilt }));
     x += dx;
     y += dy;
     tilt += tiltStep;
   }
   // Krone: unge blad peker opp, eldre henger ned
-  parts.push(ico(0.3, 0, 0x5d6b2c, { x, y: y + 0.05, sy: 1.3 }));
+  if (crown) parts.push(oct(0.3, 0x5d6b2c, { x, y: y + 0.05, sy: 1.3, ry: 0.4 }));
   for (let i = 0; i < fronds; i++) {
     const yaw = (i / fronds) * Math.PI * 2 + rng() * 0.4;
     const age = i % 3;
@@ -207,14 +231,15 @@ function coconutPalm({ segs = 9, segLen = 1, tilt0 = 0.05, tiltStep = 0.025, r0 
     const droop = [1.3, 1.7, 1.9][age];
     const len = flen * (0.85 + rng() * 0.3) * (age === 0 ? 0.85 : 1);
     const col = age === 2 ? 0x356f2a : 0x3c8a30;
-    parts.push(xf(frond({ len, wid: 0.62, lift, droop, col, tip: age === 0 ? 0x8cc44e : 0x74ad42 }), { x, y: y + 0.12, ry: yaw }));
+    parts.push(xf(frond({ len, wid: 0.62, lift, droop, seg: fseg, col, tip: age === 0 ? 0x8cc44e : 0x74ad42 }), { x, y: y + 0.12, ry: yaw }));
   }
-  // Et visnet, brunt blad som henger ned
-  parts.push(xf(frond({ len: flen * 0.8, wid: 0.45, lift: -0.6, droop: 0.9, seg: 5, col: 0x8a6e3e, tip: 0xb0925a }), { x, y: y - 0.05, ry: rng() * 6.28 }));
+  // Et visnet, brunt blad som henger ned (vinkelen trekkes uansett, så resten av palmen blir lik)
+  const wYaw = rng() * 6.28;
+  if (withered) parts.push(xf(frond({ len: flen * 0.8, wid: 0.45, lift: -0.6, droop: 0.9, seg: 4, col: 0x8a6e3e, tip: 0xb0925a }), { x, y: y - 0.05, ry: wYaw }));
   // Kokosnøtter
   for (let k = 0; k < nuts; k++) {
     const a = (k / nuts) * Math.PI * 2 + rng();
-    parts.push(ico(0.17, 0, k % 2 ? 0x6b4a26 : 0x8a9a34, { x: x + Math.cos(a) * 0.24, y: y - 0.22 - (k % 2) * 0.1, z: Math.sin(a) * 0.24 }));
+    parts.push(oct(0.17, k % 2 ? 0x6b4a26 : 0x8a9a34, { x: x + Math.cos(a) * 0.24, y: y - 0.22 - (k % 2) * 0.1, z: Math.sin(a) * 0.24, rx: 0.5, ry: a }));
   }
   return shadeVariation(merge(parts), 0.05, seed);
 }
@@ -229,9 +254,12 @@ function palmBent() {
 }
 
 function palmTwin() {
-  const a = coconutPalm({ segs: 9, segLen: 1.0, tilt0: 0.2, tiltStep: 0.02, seed: 21 });
-  const b = xf(coconutPalm({ segs: 7, segLen: 0.95, tilt0: 0.5, tiltStep: -0.03, r0: 0.18, r1: 0.12, fronds: 9, flen: 2.9, seed: 27, nuts: 3 }), { ry: Math.PI * 0.95, x: -0.3, z: 0.2 });
-  const c = xf(coconutPalm({ segs: 2, segLen: 0.7, tilt0: 0.3, tiltStep: 0.1, r0: 0.1, r1: 0.08, fronds: 6, flen: 1.6, seed: 33, nuts: 0 }), { ry: 2.0, x: 0.7, z: -0.9 });
+  // Færre, lengre stammeledd (samme høyde og bue) og litt slankere kroner enn de enkle palmene
+  const a = coconutPalm({ segs: 8, segLen: 9 / 8, tilt0: 0.2, tiltStep: 0.02 * 9 / 8, fronds: 9, seed: 21, nuts: 2 });
+  const b = xf(coconutPalm({ segs: 6, segLen: 0.95 * 7 / 6, tilt0: 0.5, tiltStep: -0.03 * 7 / 6, r0: 0.18, r1: 0.12, fronds: 8, fseg: 4, flen: 2.9, seed: 27, nuts: 2, withered: false }), { ry: Math.PI * 0.95, x: -0.3, z: 0.2 });
+  // Ung palme ved foten: bare to ledd og en liten bladrosett. Uten rotfot senkes den 6 cm,
+  // så den skrå stammebunnen fortsatt går ned i bakken (som rotfoten gjorde før).
+  const c = xf(coconutPalm({ segs: 2, segLen: 0.7, tilt0: 0.3, tiltStep: 0.1, r0: 0.1, r1: 0.08, rad: 4, fronds: 5, fseg: 3, flen: 1.6, seed: 33, nuts: 0, foot: false, crown: false, withered: false }), { ry: 2.0, x: 0.7, y: -0.06, z: -0.9 });
   return merge([a, b, c]);
 }
 
@@ -262,7 +290,8 @@ function pandanus() {
     for (let i = 0; i < 11; i++) {
       const yaw = (i / 11) * Math.PI * 2 + rng() * 0.4;
       const lift = 1.05 - (i % 3) * 0.5;
-      parts.push(xf(strip({ len: 1.9 + rng() * 0.6, wid: 0.13, lift, droop: 1.8, seg: 3, col: 0x3a6a36, tip: 0x86aa5c }), { x: tx, y: ty, z: tz, ry: yaw }));
+      // Smale blad: flate (V-folden synes ikke på 26 cm brede blad)
+      parts.push(xf(strip({ len: 1.9 + rng() * 0.6, wid: 0.13, lift, droop: 1.8, seg: 3, col: 0x3a6a36, tip: 0x86aa5c, flat: true }), { x: tx, y: ty, z: tz, ry: yaw }));
     }
     if (j === 1) parts.push(jIco(0.26, 1, 0xe08a2a, 0.06, 4, { x: tx, y: ty - 0.32, z: tz, sy: 1.2 }));
   });
@@ -276,11 +305,11 @@ function tropicalBush() {
   const greens = [0x2f7a30, 0x37883a, 0x2a6c2c];
   [[0, 0.5, 0, 0.72], [0.5, 0.42, 0.25, 0.55], [-0.45, 0.45, -0.2, 0.58]].forEach(([x, y, z, r], i) =>
     parts.push(jIco(r, 1, greens[i % 3], r * 0.3, i * 7 + 3, { x, y, z, sy: 0.85 })));
-  // Store blanke blader som stikker ut av busken
+  // Store blanke blader som stikker ut av busken (flate, med spiss fot som skjules inne i busken)
   for (let i = 0; i < 9; i++) {
     const yaw = (i / 9) * Math.PI * 2 + rng() * 0.5;
     const lift = 0.7 + rng() * 0.4;
-    parts.push(xf(strip({ len: 1.25 + rng() * 0.35, wid: 0.32, lift, droop: 1.5, seg: 3, col: 0x2f7d34, tip: 0x6cba4c, round: true }), { y: 0.3 + rng() * 0.3, ry: yaw }));
+    parts.push(xf(strip({ len: 1.25 + rng() * 0.35, wid: 0.32, lift, droop: 1.5, seg: 3, col: 0x2f7d34, tip: 0x6cba4c, round: true, flat: true, stalk: true }), { y: 0.3 + rng() * 0.3, ry: yaw }));
   }
   return shadeVariation(merge(parts), 0.06, 13);
 }
@@ -291,14 +320,23 @@ function hibiscus() {
   const greens = [0x2c6a2c, 0x34793a, 0x285f28];
   const blobs = [[0, 0.62, 0, 0.75], [0.55, 0.5, 0.2, 0.58], [-0.5, 0.52, -0.25, 0.6], [0.05, 0.95, -0.35, 0.5]];
   blobs.forEach(([x, y, z, r], i) => parts.push(jIco(r, 1, greens[i % 3], r * 0.3, i * 5 + 2, { x, y, z, sy: 0.9 })));
-  // Store blomster (rød, rosa, gul) på overflaten av busken
+  // Store blomster (rød, rosa, gul) på overflaten av busken: lave, femkantede kjegler (fem kronblad)
+  // som vender utover. Den åpne bunnen ligger inne i busken.
   const cols = [0xe8283c, 0xf04a78, 0xe8283c, 0xf6c23a];
-  for (let i = 0; i < 14; i++) {
+  const up = new THREE.Vector3(0, 1, 0), n = new THREE.Vector3(), q = new THREE.Quaternion();
+  for (let i = 0; i < 12; i++) {
     const [bx, by, bz, br] = blobs[i % blobs.length];
     const a = rng() * Math.PI * 2;
     const el = 0.15 + rng() * 0.9;
-    const fx = bx + Math.cos(a) * Math.cos(el) * br, fy = by + Math.sin(el) * br * 0.9, fz = bz + Math.sin(a) * Math.cos(el) * br;
-    parts.push(ico(0.13, 0, cols[i % cols.length], { x: fx, y: fy, z: fz, sy: 0.55, ry: a }));
+    n.set(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
+    const fx = bx + n.x * br, fy = by + n.y * br * 0.9, fz = bz + n.z * br;
+    const f = paint(new THREE.CylinderGeometry(0, 0.15, 0.07, 5, 1, true), cols[i % cols.length]);
+    f.translate(0, 0.03, 0);
+    f.rotateY(a);
+    f.applyQuaternion(q.setFromUnitVectors(up, n));
+    f.translate(fx, fy, fz);
+    f.computeVertexNormals();
+    parts.push(f);
   }
   return merge(parts);
 }

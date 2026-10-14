@@ -13,18 +13,20 @@ const LAKE = 0.8; // lakeFactor – fjellvann i dalene
 
 /**
  * Hvor langt inn i fjellheimen punktet ligger: 0 ved foten (mot savannen), 1 langt inne blant tindene.
- * Tilnærmer worldgen.temperature() med én støyoktav, slik at foten følger biomgrensen. 1 støykall.
+ * Tilnærmer worldgen.temperature() med de to første støyoktavene (feil < ~0.07), slik at foten følger
+ * biomgrensen. 2 støykall.
  */
 function innerAt(n, x, z, half = HALF) {
   const d = Math.sqrt(x * x + z * z);
   const amt = 0.16 + 0.34 * smoothstep(150, 900, d);
-  const t = (z / half) * 1.05 + n.temp.noise2D(x * 0.0007, z * 0.0007) * 0.571 * amt;
-  return smoothstep(-0.36, -0.66, t);
+  const tn = n.temp.noise2D(x * 0.0007, z * 0.0007) + n.temp.noise2D(x * 0.0014, z * 0.0014) * 0.5;
+  const t = (z / half) * 1.05 + (tn / 1.75) * amt;
+  return smoothstep(-0.4, -0.68, t);
 }
 
-/** Fjellmassiv (0..1): store fjellpartier der grunnstøyen og en egen lavfrekvent støy er høy. 1 støykall. */
-function massAt(n, x, z, base) {
-  return smoothstep(-0.34, 0.26, base * 0.9 + n.mount.noise2D(x * 0.0012 + 41.7, z * 0.0012 - 18.3) * 0.55);
+/** Fjellmassiv (0..1): store fjellpartier der grunnstøyen er høy, brede daler der den er lav (ingen ekstra støykall). */
+function massAt(base) {
+  return smoothstep(-0.22, 0.2, base);
 }
 
 /** Fjellvidde (0..1): slake høyplatåer der denne støyen er høy. 1 støykall. */
@@ -91,16 +93,16 @@ export default {
 
   height(x, z, c) {
     const n = c.n;
-    const inner = innerAt(n, x, z, c.half); // 1 kall
+    const inner = innerAt(n, x, z, c.half); // 2 kall
     // Dalbunn: slake, grønne daler som stiger svakt innover i fjellheimen
     let h = 12 + inner * 6 + c.base * 6 + c.detail * 1.1;
-    // Fjellmassiver der grunnstøyen og en egen lavfrekvent støy er høy (1 kall). Lavere ved foten.
-    const mass = massAt(n, x, z, c.base);
+    // Fjellmassiver der grunnstøyen er høy, lavere ved foten
+    const mass = massAt(c.base);
     const amp = mass * (0.3 + 0.7 * inner);
     if (amp > 0.001) {
       // Brede fjellkropper med skarpe rygger og tinder (2 kall); detaljstøyen gir ru, oppsprukne flanker
       const r = n.mount.ridged(x * 0.0026 + 17.1, z * 0.0026 - 9.4, 2) + (c.detail + 1) * 0.06;
-      let mh = amp * amp * (28 + r * 150) + amp * r * 12 + c.detail * amp * 8;
+      let mh = amp * amp * (22 + r * 128) + amp * r * 10 + c.detail * amp * 7;
       // Fjellvidde: høye, slake platåer med bratte kanter (1 kall)
       const pl = plateauAt(n, x, z);
       if (pl > 0) {
@@ -109,44 +111,53 @@ export default {
         if (ex > 0) mh -= ((ex * ex) / (ex + 10)) * 0.8 * pl;
       }
       h += mh;
-      // Mykt tak: tindene når sjelden over ~150 m
-      if (h > 112) h = 112 + 46 * (1 - Math.exp((112 - h) / 46));
+      // Mykt tak: de høyeste tindene flates så vidt av og når sjelden over ~150 m
+      if (h > 128) h = 128 + 30 * (1 - Math.exp((128 - h) / 30));
     }
-    // Fjellvann bare i dalene: worldgen senker terrenget mot −9 m der innsjøstøyen er høy. Inne i fjellmassivene
-    // løftes terrenget på forhånd like mye, slik at fjellene står urørt i stedet for å få dype groper (3 kall).
+    // Fjellvann bare i dalene: worldgen senker terrenget mot −9 m (h ← h·(1−a) − 9a) der innsjøstøyen er høy. Inne
+    // i fjellmassivene løftes terrenget på forhånd like mye, slik at fjellene står urørt i stedet for å få dype groper.
+    // a regnes ut nøyaktig som i worldgen (savannen har lakeFactor 0, så lakeF = LAKE · w), og da blir også
+    // overgangen mot nabobiomet riktig blandet (3 kall).
     const lk = smoothstep(0.34, 0.5, n.lake.fbm(x * 0.0032, z * 0.0032, 3));
     if (lk > 0) {
-      const a = lk * LAKE * c.w; // samme styrke som i worldgen (savannen har lakeFactor 0)
-      const keep = smoothstep(0.12, 0.42, mass) * smoothstep(0.85, 1, c.w);
+      const a = lk * LAKE * c.w;
+      const keep = smoothstep(0.12, 0.42, mass);
       if (keep > 0) h += (keep * a / (1 - a)) * (h + 9);
     }
     return h;
   },
 
   color(c, out) {
-    const { h, ny, v, v2 } = c;
-    // Frodig, grønn fjelleng – fra friskt grønt til gulgrønt
-    let r = lerp(0.33, 0.45, v), g = lerp(0.53, 0.6, v), b = lerp(0.2, 0.25, v);
-    const yel = smoothstep(0.6, 0.85, v2) * 0.5;
-    r = lerp(r, 0.55, yel); g = lerp(g, 0.6, yel); b = lerp(b, 0.27, yel);
-    // Mørkere skogbunn i liene
-    const fo = smoothstep(14, 26, h) * (1 - smoothstep(52, 66, h)) * 0.55;
-    r = lerp(r, 0.27, fo); g = lerp(g, 0.41, fo); b = lerp(b, 0.19, fo);
+    const { x, z, h, ny, v, v2, n } = c;
+    // Frodig, grønn fjelleng – fra friskt grønt til gulgrønt, med store flekker i ulike nyanser
+    let r = lerp(0.32, 0.42, v), g = lerp(0.49, 0.57, v), b = lerp(0.19, 0.24, v);
+    const patch = n.color.noise2D(x * 0.0041 + 33.3, z * 0.0041 - 71.9);
+    const dry = smoothstep(0.1, 0.6, patch) * 0.6 + smoothstep(0.62, 0.85, v2) * 0.35;
+    r = lerp(r, 0.57, dry); g = lerp(g, 0.59, dry); b = lerp(b, 0.29, dry);
+    const lush = smoothstep(-0.2, -0.6, patch) * 0.55;
+    r = lerp(r, 0.23, lush); g = lerp(g, 0.44, lush); b = lerp(b, 0.17, lush);
+    // Mørk skogbunn med barnåler under barskogen i liene (samme skogstøy som i pick)
+    const fo = smoothstep(0.1, 0.45, forestAt(n, x, z) + smoothstep(16, 34, h) * 0.5) * (1 - smoothstep(50, 62, h)) * 0.75;
+    r = lerp(r, lerp(0.24, 0.3, v2), fo); g = lerp(g, lerp(0.34, 0.33, v2), fo); b = lerp(b, lerp(0.16, 0.18, v2), fo);
     // Snaufjell: olivenbrun lyng og grå lav
     const heath = smoothstep(56, 72, h);
     r = lerp(r, lerp(0.5, 0.6, v2), heath); g = lerp(g, lerp(0.5, 0.58, v2), heath); b = lerp(b, lerp(0.32, 0.46, v2), heath);
-    // Ur (lys, grå-brun stein) i middels bratte skråninger og høyt oppe
-    const scree = Math.max(smoothstep(0.9, 0.78, ny) * 0.85, smoothstep(76, 88, h) * 0.5);
-    r = lerp(r, lerp(0.58, 0.5, v2), scree); g = lerp(g, lerp(0.56, 0.49, v2), scree); b = lerp(b, lerp(0.52, 0.47, v2), scree);
-    // Grått fjell i bratt terreng, mørkere i klippene
-    const rock = smoothstep(0.8, 0.66, ny);
-    const cliff = smoothstep(0.6, 0.42, ny);
-    r = lerp(r, lerp(lerp(0.48, 0.42, v), 0.36, cliff), rock);
-    g = lerp(g, lerp(lerp(0.48, 0.43, v), 0.36, cliff), rock);
-    b = lerp(b, lerp(lerp(0.5, 0.45, v), 0.39, cliff), rock);
-    // Snø over snøgrensen (ujevn grense, glir av i de bratteste veggene)
-    const snow = smoothstep(SNOW - 6 + v2 * 8, SNOW + 4 + v2 * 8, h) * (1 - cliff * 0.7);
-    r = lerp(r, 0.94, snow); g = lerp(g, 0.96, snow); b = lerp(b, 0.99, snow);
+    // Ur (lys, grå-brun stein) i bratte skråninger under klippene og høyt oppe
+    const scree = Math.max(smoothstep(0.84, 0.74, ny) * 0.8, smoothstep(74, 88, h) * 0.45);
+    r = lerp(r, lerp(0.6, 0.5, v2), scree); g = lerp(g, lerp(0.58, 0.49, v2), scree); b = lerp(b, lerp(0.53, 0.47, v2), scree);
+    // Grått fjell i bratt terreng: lagdelt berg (vannrette bånd), blågrått til brungrått, mørkere i klippene
+    const rock = smoothstep(0.76, 0.64, ny);
+    if (rock > 0) {
+      const band = 0.9 + 0.1 * Math.sin(h * 0.42 + v * 3.5) + (v2 - 0.5) * 0.08;
+      const cliff = smoothstep(0.6, 0.42, ny);
+      const k = lerp(lerp(0.5, 0.43, v), 0.38, cliff) * band;
+      r = lerp(r, k * lerp(0.98, 1.05, v2), rock);
+      g = lerp(g, k * lerp(1.0, 1.0, v2), rock);
+      b = lerp(b, k * lerp(1.07, 0.95, v2), rock);
+    }
+    // Snø over snøgrensen (ujevn grense); bare de bratteste veggene stikker fram som mørk stein
+    const snow = smoothstep(SNOW - 6 + v2 * 8, SNOW + 4 + v2 * 8, h) * (1 - smoothstep(0.66, 0.42, ny) * 0.75);
+    r = lerp(r, lerp(0.86, 0.96, v), snow); g = lerp(g, lerp(0.9, 0.97, v), snow); b = lerp(b, lerp(0.97, 1.0, v), snow);
     // Grus og runde steiner langs fjellvannene
     const shore = 1 - smoothstep(0.5, 2.0, h);
     r = lerp(r, lerp(0.56, 0.48, v2), shore); g = lerp(g, lerp(0.54, 0.47, v2), shore); b = lerp(b, lerp(0.49, 0.44, v2), shore);
@@ -181,7 +192,7 @@ export default {
     }
     // Ved vannkanten: bekkesteiner, dvergbjørk og en og annen fjellbjørk
     if (h < 2.2) {
-      if (r2 > 0.4) return null;
+      if (r2 > 0.5) return null;
       return r3 < 0.55 ? 'mountains_streamStones' : r3 < 0.85 ? 'mountains_dwarfBirch' : 'mountains_birch';
     }
     // Snaufjell over tregrensen

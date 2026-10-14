@@ -126,7 +126,7 @@ function stone(o) {
   return xf(g, { x, y, z, rx, ry, rz });
 }
 
-/** Stor kampestein med en mindre stein inntil (ca. 2,4 × 1,6 m ved skala 1). */
+/** Stor kampestein med to mindre steiner inntil (ca. 2,9 × 2,4 m og 1,4 m høy ved skala 1). */
 function boulder(snowy) {
   const snow = snowy ? 0.62 : 0;
   return merge([
@@ -282,14 +282,14 @@ function dwarfBirch() {
   return shadeVariation(merge(parts), 0.1, 7);
 }
 
-/** Einer: smal, mørk blågrønn søyle med et par mindre skudd ved siden av. */
+/** Einer: smal, tett og mørk blågrønn søylebusk med et par mindre skudd ved siden av. */
 function juniper() {
-  const parts = [];
-  [[0, 0, 0.5, 1.9, 0.04], [0.48, 0.2, 0.36, 1.3, -0.18], [-0.38, -0.3, 0.34, 1.1, 0.2], [0.1, -0.5, 0.3, 0.8, 0.25]].forEach(([x, z, r, h, lean], i) => {
-    const g = jitter(paint(new THREE.ConeGeometry(r, h, 7, 3), JUNIPER[i % 3]), r * 0.3, i * 3 + 5);
-    parts.push(xf(g, { x, y: h / 2 - 0.05, z, rz: lean, rx: lean * 0.5 }));
-  });
-  parts.push(cone(0.06, 0.25, 4, 0x4a3a2c, { y: 0.05 }));
+  const parts = [cone(0.07, 0.3, 4, 0x4a3a2c, { y: 0.1 })];
+  [[0, 0, 0.42, 0.95, 0], [0.05, 0.05, 0.3, 1.45, 0.05], [0.42, 0.2, 0.3, 0.55, -0.2], [-0.36, -0.26, 0.28, 0.5, 0.2], [0.12, -0.42, 0.24, 0.4, 0.15]]
+    .forEach(([x, z, r, y, lean], i) => {
+      const sy = i < 2 ? 1.9 : 1.5;
+      parts.push(jIco(r, 1, JUNIPER[i % 3], r * 0.35, i * 3 + 5, { x, y, z, sy, rz: lean }));
+    });
   return shadeVariation(merge(parts), 0.08, 3);
 }
 

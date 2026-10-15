@@ -11,6 +11,8 @@ export class Input {
     this.mouseButtons = new Set();
     this.clicks = new Set(); // museknapper trykket denne rammen
     this.locked = false;
+    this.axis = { x: 0, y: 0 }; // analog bevegelse fra berøringsstyrespaken (x mot høyre, y fremover)
+    this.axisRun = false; // styrespaken er presset helt ut
     this.handlers = { keydown: [], lockchange: [] };
     this.sensitivity = 1;
 
@@ -71,6 +73,29 @@ export class Input {
 
   down(code) {
     return this.keys.has(code);
+  }
+
+  /** Trykk/slipp en tast fra berøringsknappene (samme virkning som tastaturet). */
+  press(code) {
+    if (!this.keys.has(code)) this.pressed.add(code);
+    this.keys.add(code);
+    const e = { code, preventDefault() {} };
+    for (const h of this.handlers.keydown) h(e);
+  }
+
+  release(code) {
+    this.keys.delete(code);
+  }
+
+  /** Bevegelse fremover (-1..1) og sideveis mot høyre (-1..1) fra tastatur og styrespak. */
+  moveY() {
+    const v = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0) + this.axis.y;
+    return Math.max(-1, Math.min(1, v));
+  }
+
+  moveX() {
+    const v = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0) + this.axis.x;
+    return Math.max(-1, Math.min(1, v));
   }
 
   wasPressed(code) {

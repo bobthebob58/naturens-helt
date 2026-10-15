@@ -1,7 +1,8 @@
 // Strømming av terrengbiter rundt spilleren, med detaljnivå (LOD), vegetasjon og skattekister.
 import * as THREE from 'three';
 import { WORLD } from '../config.js';
-import { buildVegetation } from '../models/vegetation.js';
+import { vegGeometry } from '../levels/models.js';
+import { VEG_INFO } from '../levels/levels.js';
 import { createChest } from '../models/props.js';
 
 const CS = WORLD.chunkSize;
@@ -52,8 +53,15 @@ function makeDetailTexture() {
 }
 
 /** Legg til vind-svai i vegetasjonsmaterialer. */
-function addWind(material, strength, minY, uniforms) {
+function addWind(material, strength, minY, uniforms, keepNormals = false) {
   material.onBeforeCompile = (shader) => {
+    if (keepNormals) {
+      // Dobbeltsidig pynt: ikke snu normalen på baksiden (ellers blir halve gresset svart)
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\n  normal = normalize( vNormal );',
+      );
+    }
     shader.uniforms.uTime = uniforms.uTime;
     shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
@@ -78,13 +86,13 @@ export class ChunkManager {
     this.chunks = new Map();
     this.quality = quality;
     this.windUniforms = { uTime: { value: 0 } };
-    this.geos = buildVegetation();
     this.detailTex = makeDetailTexture();
     this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: this.detailTex });
     this.vegMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     addWind(this.vegMat, 0.022, 1.5, this.windUniforms);
+    this.staticMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.grassMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-    addWind(this.grassMat, 0.16, 0.0, this.windUniforms);
+    addWind(this.grassMat, 0.16, 0.0, this.windUniforms, true);
     this.collected = new Set();
     this.lastCx = null;
     this.lastCz = null;
@@ -149,10 +157,12 @@ export class ChunkManager {
         const cheb = Math.max(Math.abs(dx), Math.abs(dz));
         const res = this.lodFor(d);
         const veg = cheb <= VR;
-        const grass = cheb <= GR;
+        // Nærgruppe: lav undervegetasjon (vegInfo.near) innen én bit, og gresspynt innen GR
+        const near = cheb <= Math.max(1, GR) && veg;
+        const decor = cheb <= GR;
         const ch = this.chunks.get(k);
-        if (!ch || ch.res !== res || !!ch.veg !== veg || !!ch.grass !== grass) {
-          jobs.push({ cx, cz, k, res, veg, grass, pri: d });
+        if (!ch || ch.res !== res || !!ch.veg !== veg || !!ch.near !== near || !!ch.nearDecor !== (near && decor)) {
+          jobs.push({ cx, cz, k, res, veg, near, decor: near && decor, pri: d });
         }
       }
     }
@@ -166,7 +176,7 @@ export class ChunkManager {
   _runJob(job) {
     let ch = this.chunks.get(job.k);
     if (!ch) {
-      ch = { cx: job.cx, cz: job.cz, k: job.k, res: 0, mesh: null, veg: null, grass: null, chests: [] };
+      ch = { cx: job.cx, cz: job.cz, k: job.k, res: 0, mesh: null, veg: null, near: null, nearDecor: false, chests: [] };
       this.chunks.set(job.k, ch);
     }
     if (ch.res !== job.res) {
@@ -179,7 +189,7 @@ export class ChunkManager {
       this.scene.add(ch.mesh);
     }
     if (job.veg && !ch.veg) {
-      ch.veg = this._buildVeg(job.cx, job.cz, false);
+      ch.veg = this._buildVeg(job.cx, job.cz, 'far');
       this.scene.add(ch.veg);
       this._buildChests(ch);
     } else if (!job.veg && ch.veg) {
@@ -187,12 +197,14 @@ export class ChunkManager {
       ch.veg = null;
       this._removeChests(ch);
     }
-    if (job.grass && !ch.grass) {
-      ch.grass = this._buildVeg(job.cx, job.cz, true);
-      this.scene.add(ch.grass);
-    } else if (!job.grass && ch.grass) {
-      this._disposeGroup(ch.grass);
-      ch.grass = null;
+    if (ch.near && (!job.near || ch.nearDecor !== job.decor)) {
+      this._disposeGroup(ch.near);
+      ch.near = null;
+    }
+    if (job.near && !ch.near) {
+      ch.near = this._buildVeg(job.cx, job.cz, job.decor ? 'near+decor' : 'near');
+      ch.nearDecor = job.decor;
+      this.scene.add(ch.near);
     }
   }
 
@@ -268,9 +280,15 @@ export class ChunkManager {
     return m;
   }
 
-  _buildVeg(cx, cz, grassOnly) {
+  /** mode: 'far' (vanlig vegetasjon), 'near' (vegInfo.near) eller 'near+decor' (pluss gresspynt). */
+  _buildVeg(cx, cz, mode) {
     const f = this.features.get(cx, cz);
-    const list = grassOnly ? f.grass : f.items;
+    let list;
+    if (mode === 'far') list = f.items.filter((it) => !VEG_INFO[it.type]?.near);
+    else {
+      list = f.items.filter((it) => VEG_INFO[it.type]?.near);
+      if (mode === 'near+decor') list = list.concat(f.grass);
+    }
     const groups = new Map();
     for (const it of list) {
       if (!groups.has(it.type)) groups.set(it.type, []);
@@ -285,22 +303,22 @@ export class ChunkManager {
     const col = new THREE.Color();
     let seed = cx * 31 + cz * 17;
     for (const [type, arr] of groups) {
-      const mat = grassOnly ? this.grassMat : this.vegMat;
-      const mesh = new THREE.InstancedMesh(this.geos[type], mat, arr.length);
+      const info = VEG_INFO[type] || {};
+      const mat = info.decor ? this.grassMat : info.static || info.box ? this.staticMat : this.vegMat;
+      const mesh = new THREE.InstancedMesh(vegGeometry(type), mat, arr.length);
       arr.forEach((it, i) => {
         e.set(0, it.ry, 0);
         q.setFromEuler(e);
         p.set(it.x, it.y, it.z);
         s.setScalar(it.s);
-        if (type === 'log') s.set(it.s, it.s, it.s);
         m4.compose(p, q, s);
         mesh.setMatrixAt(i, m4);
         seed = (seed * 9301 + 49297) % 233280;
-        const v = 0.86 + (seed / 233280) * 0.24;
+        const v = info.box ? 0.94 + (seed / 233280) * 0.12 : 0.86 + (seed / 233280) * 0.24;
         col.setRGB(v, v, v);
         mesh.setColorAt(i, col);
       });
-      mesh.castShadow = !grassOnly && type !== 'snowDrift';
+      mesh.castShadow = !info.noShadow && !info.decor;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
       group.add(mesh);
@@ -372,7 +390,7 @@ export class ChunkManager {
       ch.mesh.geometry.dispose();
     }
     if (ch.veg) this._disposeGroup(ch.veg);
-    if (ch.grass) this._disposeGroup(ch.grass);
+    if (ch.near) this._disposeGroup(ch.near);
     this._removeChests(ch);
     this.chunks.delete(ch.k);
   }

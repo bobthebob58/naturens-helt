@@ -118,6 +118,22 @@ export function createCage() {
   return g;
 }
 
+/** Skipscontainer (brukt i byleirer der smuglerne gjemmer dyr). Lang akse langs lokal Z. */
+export function createContainer(color = 0x2e6da4) {
+  const parts = [box(2.4, 2.6, 6, color, { y: 1.3 })];
+  // Korrugerte sider
+  for (let i = 0; i < 13; i++) {
+    const z = -2.85 + i * 0.475;
+    parts.push(box(2.46, 2.5, 0.12, color, { y: 1.3, z }));
+  }
+  parts.push(box(2.5, 0.12, 6.05, 0x333333, { y: 2.62 }));
+  parts.push(box(2.5, 0.12, 6.05, 0x333333, { y: 0.06 }));
+  parts.push(box(2.3, 2.4, 0.06, 0x555555, { y: 1.3, z: 3.02 }));
+  parts.push(box(0.06, 2.2, 0.08, 0x222222, { y: 1.3, z: 3.06 }));
+  const m = vmesh(merge(parts), { cast: true, receive: true });
+  return m;
+}
+
 export function createTrophyRack() {
   // Et stativ med skinn – et tegn på krypskyting
   return vmesh(merge([

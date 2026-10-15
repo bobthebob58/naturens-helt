@@ -216,24 +216,59 @@ export class AudioSystem {
     this.ambient = { src: s, filter: f, gain: g, birdTimer: 2 };
   }
 
-  updateAmbient(dt, biome, altitude, underwater, active) {
+  /**
+   * amb: biomets ambient-felt { wind, birds, insects, frogs, city } (se js/levels/biomes/*.js)
+   */
+  updateAmbient(dt, amb, altitude, underwater, active) {
     const a = this.ambient;
     if (!a || !this.ok) return;
+    amb = amb || {};
     const t = this.ctx.currentTime;
-    let wind = biome === 'ice' ? 0.09 : biome === 'desert' ? 0.06 : 0.035;
+    let wind = amb.wind ?? 0.04;
     wind += Math.min(0.08, Math.max(0, altitude - 30) * 0.0008);
     if (underwater) wind = 0.12;
     if (!active) wind = 0;
     a.gain.gain.setTargetAtTime(wind, t, 0.5);
-    a.filter.frequency.setTargetAtTime(underwater ? 250 : 380 + Math.sin(t * 0.3) * 120, t, 0.5);
-    // Fuglekvitter i skogen
-    if (active && biome === 'forest' && !underwater) {
+    const cityHum = amb.city && !underwater;
+    a.filter.frequency.setTargetAtTime(underwater ? 250 : cityHum ? 220 : 380 + Math.sin(t * 0.3) * 120, t, 0.5);
+    if (!active || underwater) return;
+    // Fuglekvitter
+    if (amb.birds) {
       a.birdTimer -= dt;
       if (a.birdTimer <= 0) {
-        a.birdTimer = 2 + Math.random() * 6;
-        const base = 2200 + Math.random() * 1600;
+        a.birdTimer = (amb.birds === 'many' ? 1 : 2) + Math.random() * (amb.birds === 'many' ? 3 : 6);
+        const tropical = amb.birds === 'many';
+        const base = (tropical ? 1400 : 2200) + Math.random() * 1600;
         const n = 2 + Math.floor(Math.random() * 4);
-        for (let i = 0; i < n; i++) this._tone('sine', base, base * (1.1 + Math.random() * 0.3), 0.08, 0.035, i * 0.11);
+        for (let i = 0; i < n; i++) this._tone(tropical && i % 2 ? 'triangle' : 'sine', base, base * (1.1 + Math.random() * 0.3), 0.08, 0.035, i * 0.11);
+      }
+    }
+    // Insekter (sirisser/sikader)
+    if (amb.insects) {
+      a.insectT = (a.insectT ?? 0) - dt;
+      if (a.insectT <= 0) {
+        a.insectT = 0.6 + Math.random() * 1.8;
+        const f = 4200 + Math.random() * 1800;
+        for (let i = 0; i < 6; i++) this._tone('square', f, f, 0.025, 0.006, i * 0.05);
+      }
+    }
+    // Frosker i sumpen
+    if (amb.frogs) {
+      a.frogT = (a.frogT ?? 0) - dt;
+      if (a.frogT <= 0) {
+        a.frogT = 1.2 + Math.random() * 3;
+        const f = 180 + Math.random() * 120;
+        this._tone('sawtooth', f, f * 0.7, 0.18, 0.04);
+        this._tone('sawtooth', f * 1.05, f * 0.75, 0.15, 0.03, 0.22);
+      }
+    }
+    // Bylyd: fjerne biler/tuting
+    if (amb.city) {
+      a.cityT = (a.cityT ?? 0) - dt;
+      if (a.cityT <= 0) {
+        a.cityT = 4 + Math.random() * 8;
+        if (Math.random() < 0.4) this._tone('square', 440, 440, 0.15, 0.02);
+        else this._burst('lowpass', 300, 0.5, 1.5, 0.05);
       }
     }
   }

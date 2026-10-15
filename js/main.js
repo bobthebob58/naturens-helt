@@ -16,6 +16,7 @@ import { saveGame, loadSave, loadSettings, saveSettings } from './core/save.js';
 import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Menus } from './ui/menus.js';
+import { TouchControls, isTouchDevice } from './ui/touch.js';
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
@@ -28,6 +29,14 @@ const TIPS = [
   'Tips: Haier angriper bare svømmere – i båten er du trygg.',
   'Tips: Kjøp dyremat og vann i butikken (B) for å hjelpe sultne og tørste dyr.',
   'Tips: Løping lager lyd. Rovdyr og krypskyttere kan høre deg!',
+  // Tips om biomer som bare finnes på én bane
+  { text: 'Tips: I sumpen lurer krokodillene i vannet – de kan også gå på land.', levels: [2] },
+  { text: 'Tips: På de tropiske øyene trenger du båt for å komme deg rundt.', levels: [2] },
+  { text: 'Tips: I byen blokkerer husene sikten. Bruk dem til å snike deg forbi smuglerne.', levels: [3] },
+  { text: 'Tips: Løver og hyener jakter på savannen – hold avstand eller kjør bil.', levels: [3] },
+  { text: 'Tips: Lander du helikopteret på et hustak, får du utsikt over hele byen.', levels: [3] },
+  { text: 'Tips: Isbjørner og ulver holder til i isverdenen nord for skogen.', levels: [1] },
+  'Tips: Du kan velge fritt mellom tre baner i startmenyen.',
 ];
 
 function blankStats() {
@@ -36,9 +45,11 @@ function blankStats() {
 
 class Game {
   constructor() {
-    this.settings = { quality: 'medium', sensitivity: 1, volume: 0.7, camera: 'third', ...loadSettings() };
     this.params = new URLSearchParams(location.search);
-    this.noLock = this.params.has('nolock');
+    // Mobil/nettbrett: berøringskontroller, ingen PointerLock og lav grafikk som standard
+    this.isTouch = isTouchDevice(this.params);
+    this.settings = { quality: this.isTouch ? 'low' : 'medium', sensitivity: 1, volume: 0.7, camera: 'third', ...loadSettings() };
+    this.noLock = this.params.has('nolock') || this.isTouch;
     const q = QUALITY[this.settings.quality] || QUALITY.medium;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: q.antialias, powerPreference: 'high-performance' });
@@ -69,6 +80,7 @@ class Game {
     this.hud = new HUD(this);
     this.minimap = new Minimap(this);
     this.menus = new Menus(this);
+    this.touch = this.isTouch ? new TouchControls(this) : null;
     this.chunks = null;
     this.gen = null;
     this.features = null;
@@ -92,7 +104,7 @@ class Game {
     this.onResize();
     this.input.on('keydown', (e) => this.onKey(e));
     this.input.on('lockchange', (locked) => this.onLockChange(locked));
-    this.menus.setContinueVisible(!!loadSave());
+    this.menus.setContinueVisible(loadSave());
     this.menus.showOnly('menu');
     window.__game = this;
     this.renderer.setAnimationLoop(() => this.loop());
@@ -124,28 +136,42 @@ class Game {
     this.onResize();
   }
 
+  /** Mobil/nettbrett: fullskjerm og liggende format (må kalles direkte fra et trykk). */
+  enterFullscreen() {
+    if (!this.isTouch || document.fullscreenElement) return;
+    const el = document.documentElement;
+    if (!el.requestFullscreen) return; // f.eks. iPhone – legg spillet til på Hjem-skjermen i stedet
+    el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+      const o = window.screen.orientation;
+      if (o && o.lock) o.lock('landscape').catch(() => {});
+    }).catch(() => {});
+  }
+
   // ------------------------------------------------------------------
   // Start / lasting
-  async startNewGame(diffKey, sameWorld = false) {
+  async startNewGame(diffKey, sameWorld = false, levelId = null) {
     this.audio.init();
     const seed = sameWorld && this.gen ? this.gen.seed : Math.floor(Math.random() * 1e9);
-    await this.loadWorld(seed, diffKey, null);
+    const level = levelId ?? (sameWorld && this.gen ? this.gen.level.id : this.menus.selectedLevel);
+    await this.loadWorld(seed, diffKey, null, level);
   }
 
   async continueGame() {
     const save = loadSave();
     if (!save) return;
     this.audio.init();
-    await this.loadWorld(save.seed, save.difficulty, save);
+    await this.loadWorld(save.seed, save.difficulty, save, save.level || 1);
   }
 
-  async loadWorld(seed, diffKey, save) {
+  async loadWorld(seed, diffKey, save, levelId = 1) {
     this.state = 'loading';
     this.input.unlock();
     this.hud.show(false);
     this.hud.clearTransient();
     this.menus.showOnly('loading');
-    const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+    const tips = TIPS.filter((t) => typeof t === 'string' || t.levels.includes(levelId));
+    const t = tips[Math.floor(Math.random() * tips.length)];
+    const tip = typeof t === 'string' ? t : t.text;
     this.menus.setLoading(0.02, 'Genererer verden …', tip);
     await nextFrame();
     this._difficulty = DIFFICULTY[diffKey] || DIFFICULTY.medium;
@@ -160,9 +186,10 @@ class Game {
     this.vehicles = {};
     if (this.chunks) this.chunks.dispose();
 
-    if (!this.gen || this.gen.seed !== seed) {
-      this.gen = new WorldGen(seed);
-      await this.minimap.buildWorldMap(this.gen, (f) => this.menus.setLoading(0.05 + f * 0.5, 'Former fjell, ørkener og isbreer …'));
+    if (!this.gen || this.gen.seed !== seed || this.gen.level.id !== levelId) {
+      this.gen = new WorldGen(seed, levelId);
+      const names = this.gen.bands.map((b) => b.name.toLowerCase());
+      await this.minimap.buildWorldMap(this.gen, (f) => this.menus.setLoading(0.05 + f * 0.5, `Former ${names[1]}, ${names[0]} og ${names[2]} …`));
     }
     this.features = new FeatureStore(this.gen);
     if (!this.chunks) this.chunks = new ChunkManager(this.scene, this.gen, this.features, this.quality);
@@ -199,7 +226,8 @@ class Game {
     this.minimap.reset();
     this.menus.setLoading(1, 'Klar!');
     this.player.updateCamera(0, this.camera);
-    this.env.update(0, 0, this.camera, this.player.pos, 10);
+    this.env.snapAtmosphere(this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
+    this.env.update(0, 0, this.camera, this.player.pos, 10, this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
     this.renderer.compile(this.scene, this.camera);
     await nextFrame();
 
@@ -208,8 +236,9 @@ class Game {
     this.hud.markDirty();
     this.menus.showOnly('click-to-play');
     if (!save) {
-      this.hud.dialog('Skogvokter Siri',
-        `Krypskyttere herjer i skogen, ørkenen og isverdenen – ${this.stats.totalPoachers} av dem! Finn leirene (se kartet med M) og stopp dem alle. Gå på huk for å snike deg innpå.`, 12);
+      const lv = this.gen.level;
+      this.hud.dialog(`${lv.ranger || 'Skogvokter'} Siri`,
+        `${lv.intro} – ${this.stats.totalPoachers} av dem! Finn leirene (se kartet med M) og stopp dem alle. Gå på huk for å snike deg innpå.`, 12);
     } else {
       this.hud.notify('Lagret spill lastet inn.', 'good');
     }
@@ -295,7 +324,7 @@ class Game {
     this.input.unlock();
     this.audio.stopEngine();
     this.hud.show(false);
-    this.menus.setContinueVisible(!!loadSave());
+    this.menus.setContinueVisible(loadSave());
     this.menus.showOnly('menu');
   }
 
@@ -446,8 +475,8 @@ class Game {
     if (this.state === 'playing') {
       this.update(dt);
     } else if (this.player && (this.state === 'ready' || this.state === 'paused' || this.state === 'shop' || this.state === 'map')) {
-      this.env.update(dt, this.time, this.camera, this.player.pos, this.gen.groundHeight(this.camera.position.x, this.camera.position.z));
-      this.audio.updateAmbient(dt, 'forest', 0, false, false);
+      this.env.update(dt, this.time, this.camera, this.player.pos, this.gen.groundHeight(this.camera.position.x, this.camera.position.z), this.gen.biomeDef(this.player.pos.x, this.player.pos.z));
+      this.audio.updateAmbient(dt, null, 0, false, false);
     }
     const t1 = performance.now();
     if (this.player && this.state !== 'menu' && this.state !== 'loading') this.renderer.render(this.scene, this.camera);
@@ -455,6 +484,7 @@ class Game {
     const t2 = performance.now();
     this.prof.update = this.prof.update * 0.9 + (t1 - t0) * 0.1;
     this.prof.render = this.prof.render * 0.9 + (t2 - t1) * 0.1;
+    if (this.touch) this.touch.update();
     this.input.endFrame();
   }
 
@@ -484,12 +514,12 @@ class Game {
     p.updateCamera(dt, this.camera);
     this.camShake = Math.max(0, this.camShake - dt * 2.5);
     const camGround = this.gen.groundHeight(this.camera.position.x, this.camera.position.z);
-    this.env.update(dt, this.time, this.camera, focus, camGround);
+    const biomeDef = this.gen.biomeDef(focus.x, focus.z);
+    this.env.update(dt, this.time, this.camera, focus, camGround, biomeDef);
 
     this.hud.update(dt);
     this.minimap.update();
-    const biome = this.gen.biomeAt(focus.x, focus.z);
-    this.audio.updateAmbient(dt, biome, focus.y, this.env.underwater, true);
+    this.audio.updateAmbient(dt, biomeDef.ambient, focus.y, this.env.underwater, true);
 
     if (this.victoryT > 0) {
       this.victoryT -= dt;

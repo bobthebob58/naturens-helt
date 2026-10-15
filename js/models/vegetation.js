@@ -170,48 +170,27 @@ function log() {
   ]);
 }
 
-/** Bygg alle vegetasjonsgeometrier én gang. */
-export function buildVegetation() {
-  return {
-    pine: pine(false),
-    snowPine: pine(true),
-    oak: oak(),
-    birch: birch(),
-    bush: bush(),
-    berryBush: berryBush(),
-    rock: rock(0x8a8680, 1),
-    rock2: rock(0x7b7771, 7),
-    desertRock: rock(0xb27a52, 3),
-    iceRock: rock(0x8f9aa6, 5),
-    cactus: cactus(),
-    deadBush: deadBush(),
-    palm: palm(),
-    iceSpike: iceSpike(),
-    grass: grass(),
-    flowers: flowers(),
-    snowDrift: snowDrift(),
-    log: log(),
-  };
-}
-
-/** Kollisjonsradius per type ved skala 1 (0 = ingen kollisjon). */
-export const VEG_INFO = {
-  pine: { radius: 0.45, cover: 1.4 },
-  snowPine: { radius: 0.45, cover: 1.4 },
-  oak: { radius: 0.55, cover: 1.6 },
-  birch: { radius: 0.3, cover: 1.0 },
-  bush: { radius: 0, cover: 1.5 },
-  berryBush: { radius: 0, cover: 1.5 },
-  rock: { radius: 0.95, cover: 1.6 },
-  rock2: { radius: 0.95, cover: 1.6 },
-  desertRock: { radius: 0.95, cover: 1.6 },
-  iceRock: { radius: 0.95, cover: 1.6 },
-  cactus: { radius: 0.4, cover: 0 },
-  deadBush: { radius: 0, cover: 0.9 },
-  palm: { radius: 0.3, cover: 0 },
-  iceSpike: { radius: 0.6, cover: 1.2 },
-  grass: { radius: 0, cover: 0 },
-  flowers: { radius: 0, cover: 0 },
-  snowDrift: { radius: 0, cover: 0 },
-  log: { radius: 0, cover: 1.0 },
+/** Byggere for vegetasjon i bane 1 (geometri lages først når typen trengs). */
+export const VEG_BUILDERS = {
+  pine: () => pine(false),
+  snowPine: () => pine(true),
+  oak,
+  birch,
+  bush,
+  berryBush,
+  rock: () => rock(0x8a8680, 1),
+  rock2: () => rock(0x7b7771, 7),
+  desertRock: () => rock(0xb27a52, 3),
+  iceRock: () => rock(0x8f9aa6, 5),
+  cactus,
+  deadBush,
+  palm,
+  iceSpike,
+  grass,
+  flowers,
+  snowDrift,
+  log,
 };
+
+// Gjenbrukbare byggeklosser for andre biomers modeller
+export { pine, oak, birch, bush, rock, palm, grass, flowers, jIco };

@@ -1,0 +1,13 @@
+{
+  "name": "Naturens Helt",
+  "short_name": "Naturens Helt",
+  "description": "Et 3D-eventyr i nettleseren: utforsk verden, hjelp dyr og mennesker, og stopp krypskytterne.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b1712",
+  "theme_color": "#0b1712",
+  "lang": "no",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

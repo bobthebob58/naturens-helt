@@ -8,6 +8,7 @@ export function saveGame(game) {
   const data = {
     version: 1,
     seed: game.gen.seed,
+    level: game.gen.level.id,
     difficulty: game.difficulty.key,
     pos: [pos.x, pos.y + 0.5, pos.z],
     yaw: p.yaw,

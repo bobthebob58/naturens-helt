@@ -1,6 +1,8 @@
 // Menyer: hovedmeny med vanskelighetsgrad, pause, butikk, game over og seier.
 import { DIFFICULTY, SHOP, WEAPONS, VEHICLES } from '../config.js';
 import { formatTime } from '../utils/math.js';
+import { LEVELS, BIOMES } from '../levels/levels.js';
+import { SPECIES } from '../levels/fauna.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,22 +23,38 @@ const CONTROLS = [
   ['Esc', 'Pause'],
 ];
 
-function controlsHTML() {
-  return CONTROLS.map(([k, d]) => `<div class="k">${k.split(' / ').map((x) => `<span class="key">${x}</span>`).join(' ')}</div><div class="d">${d}</div>`).join('');
+// Berøringskontroller (mobil og nettbrett)
+const TOUCH_CONTROLS = [
+  ['Venstre tommel', 'Styrespak: gå / styre (helt ut = løp)'],
+  ['Høyre tommel', 'Dra for å se deg rundt'],
+  ['⚔️', 'Angrip med våpen'],
+  ['⤒', 'Hopp (helikopter: opp, bil: brems)'],
+  ['🏃', 'Løp (helikopter: ned)'],
+  ['🥷', 'Gå på huk – snik (i vann: dykk)'],
+  ['✋', 'Samhandle · stig på/av · hent kjøretøy'],
+  ['🔁', 'Bytt våpen'],
+  ['⏸ 🗺️ 🛒', 'Pause · verdenskart · butikk'],
+  ['💊 🚲 🎥', 'Medisin · velg kjøretøy · kamera'],
+];
+
+function controlsHTML(touch) {
+  return (touch ? TOUCH_CONTROLS : CONTROLS).map(([k, d]) => `<div class="k">${k.split(' / ').map((x) => `<span class="key">${x}</span>`).join(' ')}</div><div class="d">${d}</div>`).join('');
 }
 
 export class Menus {
   constructor(game) {
     this.game = game;
     this.selectedDiff = game.settings.difficulty || 'medium';
+    this.selectedLevel = LEVELS[game.settings.level] ? +game.settings.level : 1;
     this.shopTab = 0;
-    $('controls-grid').innerHTML = controlsHTML();
-    $('controls-grid-pause').innerHTML = controlsHTML();
+    $('controls-grid').innerHTML = controlsHTML(game.isTouch);
+    $('controls-grid-pause').innerHTML = controlsHTML(game.isTouch);
+    this.buildLevels();
     this.buildDifficulty();
     this.bindSettings();
 
-    $('btn-new').onclick = () => game.startNewGame(this.selectedDiff);
-    $('btn-continue').onclick = () => game.continueGame();
+    $('btn-new').onclick = () => { game.enterFullscreen(); game.startNewGame(this.selectedDiff); };
+    $('btn-continue').onclick = () => { game.enterFullscreen(); game.continueGame(); };
     $('btn-resume').onclick = () => game.resume();
     $('btn-save').onclick = () => game.save(true);
     $('btn-shop').onclick = () => game.openShop();
@@ -50,6 +68,27 @@ export class Menus {
     $('btn-continue-play').onclick = () => game.resume();
     $('click-to-play').onclick = () => game.resume();
     document.querySelectorAll('.btn, .tab, .diff').forEach((b) => b.addEventListener('click', () => game.audio.ui()));
+  }
+
+  buildLevels() {
+    const list = $('level-list');
+    list.innerHTML = Object.values(LEVELS).map((lv) => `
+      <button class="level${lv.id === this.selectedLevel ? ' selected' : ''}" data-id="${lv.id}">
+        <div class="l-top">
+          <div class="l-icon">${lv.icon}</div>
+          <div><div class="l-num">Bane ${lv.id}</div><div class="l-name">${lv.name}</div></div>
+        </div>
+        <div class="l-desc">${lv.desc}</div>
+        <div class="l-biomes">${[lv.bands[1], lv.bands[0], lv.bands[2]].map((k) => `<span>${BIOMES[k].icon} ${BIOMES[k].name}</span>`).join('')}</div>
+      </button>`).join('');
+    list.querySelectorAll('.level').forEach((el) => {
+      el.onclick = () => {
+        this.selectedLevel = +el.dataset.id;
+        list.querySelectorAll('.level').forEach((x) => x.classList.toggle('selected', x === el));
+        this.game.settings.level = this.selectedLevel;
+        this.game.persistSettings();
+      };
+    });
   }
 
   buildDifficulty() {
@@ -98,8 +137,14 @@ export class Menus {
     }
   }
 
-  setContinueVisible(v) {
-    $('btn-continue').classList.toggle('hidden', !v);
+  /** save: det lagrede spillet (eller null). Knappen viser hvilken bane den fortsetter. */
+  setContinueVisible(save) {
+    const btn = $('btn-continue');
+    btn.classList.toggle('hidden', !save);
+    if (save) {
+      const lv = LEVELS[save.level || 1] || LEVELS[1];
+      btn.textContent = `⟲ Fortsett: ${lv.icon} ${lv.name}`;
+    }
   }
 
   setLoading(frac, title, tip) {
@@ -112,6 +157,7 @@ export class Menus {
     const g = this.game;
     const s = g.stats;
     return [
+      ['Bane', `${g.gen?.level?.icon || ''} ${g.gen?.level?.name || ''}`],
       ['Tid', formatTime(g.time)],
       ['Krypskyttere stoppet', `${s.stopped} / ${s.totalPoachers}`],
       ['Mynter tjent', s.coinsEarned],
@@ -137,7 +183,8 @@ export class Menus {
       drown: 'Du druknet – du var under vann for lenge.',
       fall: 'Du falt for langt.',
     };
-    $('gameover-cause').textContent = texts[cause] || 'Helsen din gikk tom.';
+    const sp = SPECIES[cause];
+    $('gameover-cause').textContent = texts[cause] || (sp ? `Du ble angrepet av ${sp.article || 'en'} ${sp.name}.` : 'Helsen din gikk tom.');
     $('gameover-stats').innerHTML = this.statsHTML();
     this.showOnly('gameover');
   }

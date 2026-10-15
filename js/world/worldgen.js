@@ -1,20 +1,25 @@
-// Prosedyrisk verdensgenerering: høyde, biomer (skog, ørken, is), innsjøer og hav.
+// Prosedyrisk verdensgenerering: høyde, biomer, innsjøer og hav.
+// Hver bane har tre biomer i bånd fra nord til sør (se js/levels/levels.js).
 import { SimplexNoise } from '../utils/noise.js';
 import { WORLD } from '../config.js';
 import { lerp, smoothstep } from '../utils/math.js';
+import { getLevel } from '../levels/levels.js';
+import { BIOMES } from '../levels/levels.js';
+
+const DEFAULT_MAP_WATER = [[80, 160, 200], [22, 70, 140]];
 
 const CELL = WORLD.cell;
 const CACHE_BITS = 18;
 const CACHE_SIZE = 1 << CACHE_BITS;
 const CACHE_MASK = CACHE_SIZE - 1;
 
-export const BIOME_NAMES = { forest: 'Skog', desert: 'Ørken', ice: 'Isverden' };
-
 const toLin = (c) => Math.pow(c, 2.2);
 
 export class WorldGen {
-  constructor(seed) {
+  constructor(seed, levelId = 1) {
     this.seed = seed;
+    this.level = getLevel(levelId);
+    this.bands = this.level.bands.map((k) => BIOMES[k]);
     this.half = WORLD.size / 2;
     this.water = WORLD.waterLevel;
     const s = (seed % 100000) * 7;
@@ -24,11 +29,16 @@ export class WorldGen {
     this.nLake = new SimplexNoise(s + 4);
     this.nMount = new SimplexNoise(s + 5);
     this.nColor = new SimplexNoise(s + 6);
+    this.nExtra = new SimplexNoise(s + 8);
+    this.noise = { base: this.nBase, detail: this.nDetail, lake: this.nLake, mount: this.nMount, color: this.nColor, extra: this.nExtra, temp: this.nTemp };
+    this._hc = { n: this.noise, base: 0, detail: 0, w: 0, half: WORLD.size / 2, seed };
+    this._cc = { n: this.noise, x: 0, z: 0, h: 0, ny: 1, steep: 0, v: 0, v2: 0, w: 0 };
+    this._tmp = [0, 0, 0];
     this.cacheKeyX = new Int32Array(CACHE_SIZE).fill(0x7fffffff);
     this.cacheKeyZ = new Int32Array(CACHE_SIZE);
     this.cacheVal = new Float32Array(CACHE_SIZE);
-    this._w = { forest: 1, desert: 0, ice: 0, t: 0 };
-    this._w2 = { forest: 1, desert: 0, ice: 0, t: 0 };
+    this._w = [0, 1, 0];
+    this._w2 = [0, 1, 0];
     this.spawn = { x: 0, z: 0, h: 5 };
     this.spawnReady = false;
     this.findSpawn();
@@ -42,56 +52,56 @@ export class WorldGen {
     return lat * 1.05 + this.nTemp.fbm(x * 0.0007, z * 0.0007, 3) * amt;
   }
 
+  /** Vekter for [nord, midten, sør]-biomene. */
   biomeWeights(x, z, out = this._w) {
     const t = this.temperature(x, z);
-    const ice = 1 - smoothstep(-0.46, -0.3, t);
-    const desert = smoothstep(0.3, 0.46, t);
-    out.ice = ice;
-    out.desert = desert;
-    out.forest = Math.max(0, 1 - ice - desert);
+    const north = 1 - smoothstep(-0.46, -0.3, t);
+    const south = smoothstep(0.3, 0.46, t);
+    out[0] = north;
+    out[2] = south;
+    out[1] = Math.max(0, 1 - north - south);
     out.t = t;
     return out;
   }
 
-  biomeAt(x, z) {
+  /** Indeks (0..2) til biomet som dominerer i punktet. */
+  bandAt(x, z) {
     const w = this.biomeWeights(x, z, this._w2);
-    if (w.ice > 0.5) return 'ice';
-    if (w.desert > 0.5) return 'desert';
-    return 'forest';
+    if (w[0] > 0.5) return 0;
+    if (w[2] > 0.5) return 2;
+    return 1;
+  }
+
+  biomeAt(x, z) {
+    return this.bands[this.bandAt(x, z)].key;
+  }
+
+  biomeDef(x, z) {
+    return this.bands[this.bandAt(x, z)];
   }
 
   // ---------- Høyde ----------
   rawHeight(x, z) {
     const w = this.biomeWeights(x, z);
-    const base = this.nBase.fbm(x * 0.0016, z * 0.0016, 4);
-    const detail = this.nDetail.fbm(x * 0.011, z * 0.011, 3);
+    const c = this._hc;
+    c.base = this.nBase.fbm(x * 0.0016, z * 0.0016, 4);
+    c.detail = this.nDetail.fbm(x * 0.011, z * 0.011, 3);
     let h = 0;
-    if (w.forest > 0.0001) {
-      let hf = 7 + base * 20 + detail * 2.2;
-      const mm = smoothstep(0.18, 0.55, this.nMount.fbm(x * 0.0009 + 30, z * 0.0009 - 20, 3));
-      if (mm > 0) {
-        const r = this.nMount.ridged(x * 0.0024, z * 0.0024, 4);
-        hf += r * r * 80 * mm;
-      }
-      h += hf * w.forest;
+    let lakeF = 0;
+    for (let i = 0; i < 3; i++) {
+      const wi = w[i];
+      if (wi <= 0.0001) continue;
+      const b = this.bands[i];
+      c.w = wi;
+      h += b.height(x, z, c) * wi;
+      lakeF += (b.lakeFactor ?? 1) * wi;
     }
-    if (w.desert > 0.0001) {
-      const warp = this.nDetail.noise2D(x * 0.003, z * 0.003) * 2.5;
-      const dune = 1 - Math.abs(Math.sin(x * 0.028 + z * 0.011 + warp));
-      let hd = 7 + base * 9 + dune * dune * 6 + detail * 0.7;
-      const mesa = smoothstep(0.42, 0.5, this.nMount.fbm(x * 0.002 - 70, z * 0.002 + 40, 2));
-      hd += mesa * 20;
-      h += hd * w.desert;
+    // Innsjøer (styrken avhenger av biomet)
+    if (lakeF > 0.001) {
+      const lk = this.nLake.fbm(x * 0.0032, z * 0.0032, 3);
+      const lakeAmt = smoothstep(0.34, 0.5, lk) * lakeF;
+      if (lakeAmt > 0) h = lerp(h, -9, lakeAmt);
     }
-    if (w.ice > 0.0001) {
-      const r = this.nMount.ridged(x * 0.0021 + 50, z * 0.0021 + 50, 5);
-      const hi = 9 + base * 14 + r * r * 110 + detail * 1.8;
-      h += hi * w.ice;
-    }
-    // Innsjøer (færre og grunnere i ørkenen – oaser)
-    const lk = this.nLake.fbm(x * 0.0032, z * 0.0032, 3);
-    const lakeAmt = smoothstep(0.34, 0.5, lk) * (1 - 0.5 * w.desert);
-    if (lakeAmt > 0) h = lerp(h, -9, lakeAmt);
     // Hav rundt hele verden
     const e = Math.max(Math.abs(x), Math.abs(z)) / this.half;
     if (e > 0.85) h = lerp(h, -30, smoothstep(0.85, 0.97, e));
@@ -159,38 +169,19 @@ export class WorldGen {
   /** Terrengfarge (lineær RGB) for et punkt. */
   terrainColor(x, z, h, ny, out) {
     const w = this.biomeWeights(x, z);
-    const v = this.nColor.noise2D(x * 0.02, z * 0.02) * 0.5 + 0.5;
-    const v2 = this.nColor.noise2D(x * 0.09 + 100, z * 0.09) * 0.5 + 0.5;
-    const steep = 1 - smoothstep(0.6, 0.8, ny);
+    const c = this._cc;
+    c.x = x; c.z = z; c.h = h; c.ny = ny;
+    c.v = this.nColor.noise2D(x * 0.02, z * 0.02) * 0.5 + 0.5;
+    c.v2 = this.nColor.noise2D(x * 0.09 + 100, z * 0.09) * 0.5 + 0.5;
+    c.steep = 1 - smoothstep(0.6, 0.8, ny);
+    const t = this._tmp;
     let r = 0, g = 0, b = 0;
-
-    if (w.forest > 0.0001) {
-      let fr = lerp(0.25, 0.4, v), fg = lerp(0.44, 0.54, v), fb = lerp(0.15, 0.19, v);
-      const dirt = smoothstep(0.72, 0.85, v2);
-      fr = lerp(fr, 0.42, dirt); fg = lerp(fg, 0.36, dirt); fb = lerp(fb, 0.22, dirt);
-      const rock = Math.max(steep, smoothstep(40, 58, h));
-      fr = lerp(fr, 0.45, rock); fg = lerp(fg, 0.43, rock); fb = lerp(fb, 0.4, rock);
-      const snow = smoothstep(66, 80, h) * (1 - steep * 0.6);
-      fr = lerp(fr, 0.93, snow); fg = lerp(fg, 0.95, snow); fb = lerp(fb, 0.98, snow);
-      const beach = 1 - smoothstep(0.6, 2.2, h);
-      fr = lerp(fr, 0.76, beach); fg = lerp(fg, 0.7, beach); fb = lerp(fb, 0.52, beach);
-      r += fr * w.forest; g += fg * w.forest; b += fb * w.forest;
-    }
-    if (w.desert > 0.0001) {
-      let dr = lerp(0.88, 0.8, v), dg = lerp(0.74, 0.6, v), db = lerp(0.5, 0.38, v);
-      const rock = Math.max(steep, smoothstep(0.75, 0.9, v2) * 0.4);
-      dr = lerp(dr, 0.7, rock); dg = lerp(dg, 0.43, rock); db = lerp(db, 0.29, rock);
-      const oasis = 1 - smoothstep(0.4, 3.0, h);
-      dr = lerp(dr, 0.36, oasis * 0.8); dg = lerp(dg, 0.52, oasis * 0.8); db = lerp(db, 0.22, oasis * 0.8);
-      r += dr * w.desert; g += dg * w.desert; b += db * w.desert;
-    }
-    if (w.ice > 0.0001) {
-      let ir = lerp(0.82, 0.94, v), ig = lerp(0.88, 0.96, v), ib = lerp(0.96, 1.0, v);
-      const rock = steep;
-      ir = lerp(ir, 0.47, rock); ig = lerp(ig, 0.5, rock); ib = lerp(ib, 0.56, rock);
-      const shore = 1 - smoothstep(0.4, 1.8, h);
-      ir = lerp(ir, 0.58, shore); ig = lerp(ig, 0.62, shore); ib = lerp(ib, 0.66, shore);
-      r += ir * w.ice; g += ig * w.ice; b += ib * w.ice;
+    for (let i = 0; i < 3; i++) {
+      const wi = w[i];
+      if (wi <= 0.0001) continue;
+      c.w = wi;
+      this.bands[i].color(c, t);
+      r += t[0] * wi; g += t[1] * wi; b += t[2] * wi;
     }
     if (h < -0.3) {
       const k = smoothstep(-0.3, -7, h);
@@ -203,22 +194,27 @@ export class WorldGen {
   /** Enkel kartfarge (sRGB 0-255) brukt på minikart og verdenskart. */
   mapColor(x, z, h, shade, out) {
     if (h < this.water) {
+      // Vannfargen blandes etter biomvektene, som landfargen (ingen skarpe skiller ved biomgrensene)
       const k = smoothstep(0, -12, h);
-      out[0] = lerp(80, 22, k); out[1] = lerp(160, 70, k); out[2] = lerp(200, 140, k);
+      const w = this.biomeWeights(x, z);
+      out[0] = out[1] = out[2] = 0;
+      for (let i = 0; i < 3; i++) {
+        const wi = w[i];
+        if (wi <= 0.0001) continue;
+        const mw = this.bands[i].mapWater || DEFAULT_MAP_WATER;
+        for (let j = 0; j < 3; j++) out[j] += lerp(mw[0][j], mw[1][j], k) * wi;
+      }
       return out;
     }
     const w = this.biomeWeights(x, z);
+    const t = this._tmp;
     let r = 0, g = 0, b = 0;
-    // skog
-    let fr = 78, fg = 128, fb = 58;
-    if (h > 42) { const k = smoothstep(42, 60, h); fr = lerp(fr, 125, k); fg = lerp(fg, 120, k); fb = lerp(fb, 112, k); }
-    if (h > 66) { const k = smoothstep(66, 80, h); fr = lerp(fr, 235, k); fg = lerp(fg, 240, k); fb = lerp(fb, 245, k); }
-    if (h < 2) { fr = 196; fg = 182; fb = 136; }
-    r += fr * w.forest; g += fg * w.forest; b += fb * w.forest;
-    // ørken
-    r += 222 * w.desert; g += 186 * w.desert; b += 125 * w.desert;
-    // is
-    r += 228 * w.ice; g += 236 * w.ice; b += 246 * w.ice;
+    for (let i = 0; i < 3; i++) {
+      const wi = w[i];
+      if (wi <= 0.0001) continue;
+      this.bands[i].mapColor(h, x, z, t);
+      r += t[0] * wi; g += t[1] * wi; b += t[2] * wi;
+    }
     out[0] = Math.min(255, r * shade);
     out[1] = Math.min(255, g * shade);
     out[2] = Math.min(255, b * shade);
@@ -261,7 +257,8 @@ export class WorldGen {
   }
 
   findSpawn() {
-    const w = { forest: 0, desert: 0, ice: 0, t: 0 };
+    const w = [0, 0, 0];
+    const sp = { minH: 3, maxH: 18, dry: 1.2, ...(this.bands[1].spawn || {}) };
     for (let r = 0; r < 1400; r += 24) {
       const steps = Math.max(1, Math.floor((r * Math.PI * 2) / 40));
       for (let i = 0; i < steps; i++) {
@@ -269,14 +266,14 @@ export class WorldGen {
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
         const h = this.rawHeight(x, z);
-        if (h < 3 || h > 18) continue;
+        if (h < sp.minH || h > sp.maxH) continue;
         this.biomeWeights(x, z, w);
-        if (w.forest < 0.97) continue;
+        if (w[1] < 0.97) continue;
         let ok = true;
         for (let k = 0; k < 10 && ok; k++) {
           const b = (k / 10) * Math.PI * 2;
           for (const rr of [20, 45, 70]) {
-            if (this.rawHeight(x + Math.cos(b) * rr, z + Math.sin(b) * rr) < 1.2) { ok = false; break; }
+            if (this.rawHeight(x + Math.cos(b) * rr, z + Math.sin(b) * rr) < sp.dry) { ok = false; break; }
           }
         }
         if (!ok) continue;

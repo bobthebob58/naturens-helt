@@ -31,7 +31,8 @@ export function perceive(e, game, dt, opts) {
         e.losT = 0.2 + Math.random() * 0.1;
         const eyeY = e.pos.y + (opts.eyeH ?? 1.6);
         const targetY = p.pos.y + (p.crouch ? 0.9 : 1.3);
-        e.losCache = game.gen.lineOfSight(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z);
+        e.losCache = game.gen.lineOfSight(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z) &&
+          !game.features.segmentBlocked(e.pos.x, eyeY, e.pos.z, p.pos.x, targetY, p.pos.z);
       }
       seen = !!e.losCache;
     }
@@ -68,9 +69,45 @@ export class AlertIcon {
 
 /** Beveg en bakkebunden enhet mot et punkt. Unngår dypt vann. Returnerer avstand igjen. */
 export function moveToward(e, game, tx, tz, speed, dt, turnRate = 6, allowWater = false) {
+  const realD = Math.hypot(tx - e.pos.x, tz - e.pos.z);
+  // Sitter enheten fast (f.eks. mot en husvegg eller et tre)? Gå en kort omvei.
+  if (e._mvx !== undefined && e._mvExp > 0.01) {
+    const moved = Math.hypot(e.pos.x - e._mvx, e.pos.z - e._mvz);
+    if (moved < e._mvExp * 0.3) e.stuckT = (e.stuckT || 0) + dt;
+    else e.stuckT = Math.max(0, (e.stuckT || 0) - dt * 2);
+    if (e.stuckT > 0.9 && !(e.detourT > 0)) {
+      // Har omveiene mot det samme målet ikke ført oss nærmere? Gi opp målet (e.blocked får kalleren til å velge nytt).
+      const same = e._dtx !== undefined && Math.abs(e._dtx - tx) + Math.abs(e._dtz - tz) < 1;
+      e.detourFails = same && realD > e._dtD - 2 ? (e.detourFails || 0) + 1 : 0;
+      e._dtx = tx;
+      e._dtz = tz;
+      e._dtD = realD;
+      if (e.detourFails >= 2) {
+        e.detourFails = 0;
+        e._dtx = undefined;
+        e.stuckT = 0;
+        e.blocked = 2;
+        e.curSpeed = 0;
+        return realD;
+      }
+      const side = Math.random() < 0.5 ? 1 : -1;
+      const h = e.heading + side * (Math.PI / 2 + (Math.random() - 0.5) * 0.6);
+      e.detour = { x: e.pos.x + Math.sin(h) * 9, z: e.pos.z + Math.cos(h) * 9 };
+      e.detourT = 1.6;
+      e.stuckT = 0;
+    }
+  }
+  if (e.detourT > 0) {
+    e.detourT -= dt;
+    tx = e.detour.x;
+    tz = e.detour.z;
+  }
   const dx = tx - e.pos.x, dz = tz - e.pos.z;
   const d = Math.hypot(dx, dz);
-  if (d < 0.05) return 0;
+  e._mvx = e.pos.x;
+  e._mvz = e.pos.z;
+  e._mvExp = 0;
+  if (d < 0.05) return realD;
   const target = Math.atan2(dx, dz);
   e.heading = dampAngle(e.heading, target, turnRate, dt);
   const facing = Math.cos(angleDiff(e.heading, target));
@@ -91,7 +128,8 @@ export function moveToward(e, game, tx, tz, speed, dt, turnRate = 6, allowWater 
   e.pos.x = nx;
   e.pos.z = nz;
   e.curSpeed = step / Math.max(dt, 1e-4);
-  return d - step;
+  e._mvExp = step;
+  return e.detourT > 0 ? realD : d - step;
 }
 
 export function snapToGround(e, game, dt) {

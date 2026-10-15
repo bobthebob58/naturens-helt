@@ -5,20 +5,15 @@ import { WORLD, WEAPONS, WEAPON_ORDER, VEHICLES, VEHICLE_ORDER, ITEM_INFO } from
 import { HumanRig, createWeaponModel } from '../models/characters.js';
 import { clamp, damp, lerp } from '../utils/math.js';
 import { Vehicle } from './vehicles.js';
+import { VEG_INFO } from '../levels/levels.js';
 
 const WATER = WORLD.waterLevel;
 const GRAVITY = 24;
-// Omtrentlig trekrone per tretype (ved skala 1) – brukes for å holde kameraet utenfor kronene
-const FOLIAGE = {
-  pine: { r: 2.1, y0: 1.6, y1: 8.6 },
-  snowPine: { r: 2.1, y0: 1.6, y1: 8.6 },
-  oak: { r: 2.4, y0: 2.4, y1: 7.2 },
-  birch: { r: 1.4, y0: 3.6, y1: 7.6 },
-  palm: { r: 2.3, y0: 6.0, y1: 8.8 },
-};
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const MUD = new THREE.Color(0x5a4a32);
+let MAX_FOLIAGE = null; // største kroneradius (×maks skala) – beregnes ved første bruk
 
 export class Player {
   constructor(game) {
@@ -246,7 +241,6 @@ export class Player {
       }
     } else {
       const need = cfg.kind === 'air' ? 4.5 : 1.8;
-      const tmp = [];
       for (let r = 3; r <= 24 && !spot; r += 1.5) {
         for (let a = 0; a < 12; a++) {
           const ang = Math.atan2(fwdZ, fwdX) + (a % 2 ? 1 : -1) * Math.ceil(a / 2) * 0.5;
@@ -254,9 +248,7 @@ export class Player {
           const depth = gen.waterDepth(x, z);
           if (cfg.kind === 'land' && depth > 0.3) continue;
           if (gen.slopeAt(x, z) < 0.75) continue;
-          g.features.collidersNear(x, z, need, tmp);
-          const blocked = tmp.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + need);
-          if (blocked) continue;
+          if (g.features.blockedAt(x, z, need)) continue;
           spot = { x, z };
           break;
         }
@@ -350,9 +342,9 @@ export class Player {
     const input = g.input;
     const v = this.vehicle;
     const c = {
-      throttle: (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0),
-      steer: (input.down('KeyA') ? 1 : 0) - (input.down('KeyD') ? 1 : 0),
-      strafe: (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0),
+      throttle: input.moveY(),
+      steer: -input.moveX(),
+      strafe: input.moveX(),
       up: input.down('Space'),
       down: input.down('ShiftLeft') || input.down('ShiftRight') || input.down('ControlLeft'),
       brake: input.down('Space'),
@@ -392,9 +384,9 @@ export class Player {
       this.crouch = !this.crouch;
       g.hud.markDirty();
     }
-    const fwd = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
-    const side = (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0);
-    const wantRun = (input.down('ShiftLeft') || input.down('ShiftRight')) && fwd > 0;
+    const fwd = input.moveY();
+    const side = input.moveX();
+    const wantRun = (input.down('ShiftLeft') || input.down('ShiftRight') || input.axisRun) && fwd > 0;
     if (wantRun && this.crouch && !this.swimming) {
       this.crouch = false;
       g.hud.markDirty();
@@ -410,6 +402,7 @@ export class Player {
     let speed = this.crouch ? 2.3 : this.running ? 8.2 : 4.6;
     if (this.swimming) speed = this.running ? 4.0 : 2.8;
     if (this.attackT >= 0 && WEAPONS[this.weapon].type === 'melee') speed *= 0.8;
+    speed *= Math.min(1, len); // styrespaken gir glidende fart (tastaturet alltid full fart)
 
     const groundH = gen.groundHeight(this.pos.x, this.pos.z);
     const accel = this.onGround || this.swimming ? 12 : 2.5;
@@ -462,7 +455,8 @@ export class Player {
       this.pos.x = ox;
       this.pos.z = oz;
     }
-    const gh = gen.groundHeight(this.pos.x, this.pos.z);
+    // Bakken – eller et tak man står på (etter å ha landet helikopteret der)
+    const gh = Math.max(gen.groundHeight(this.pos.x, this.pos.z), g.features.roofBelow(this.pos.x, this.pos.z, this.pos.y + 0.3));
     const wasOnGround = this.onGround;
     if (this.pos.y <= gh) {
       if (!wasOnGround && this.vel.y < -17 && !this.swimming && WATER - gh < 1.0) {
@@ -521,11 +515,10 @@ export class Player {
       this.stepT -= dt * hs;
       if (this.stepT <= 0) {
         this.stepT = this.running ? 2.2 : 1.7;
-        const biome = gen.biomeAt(this.pos.x, this.pos.z);
-        const surf = d2 > 0.05 ? 'water' : biome === 'ice' ? 'snow' : biome === 'desert' ? 'sand' : 'grass';
+        const surf = d2 > 0.05 ? 'water' : gen.biomeDef(this.pos.x, this.pos.z).surface || 'grass';
         if (!this.crouch) g.audio.step(surf);
         if (this.running && Math.random() < 0.5) {
-          g.particles.burst(surf === 'snow' ? 'snow' : surf === 'water' ? 'splash' : 'dust', { x: this.pos.x, y: this.pos.y + 0.1, z: this.pos.z }, 2, { speed: 1.2 });
+          g.particles.burst(surf === 'snow' ? 'snow' : surf === 'water' ? 'splash' : 'dust', { x: this.pos.x, y: this.pos.y + 0.1, z: this.pos.z }, 2, surf === 'mud' ? { speed: 1.2, color: MUD } : { speed: 1.2 });
         }
       }
     }
@@ -624,9 +617,20 @@ export class Player {
   }
 
   cameraInFoliage(pos) {
-    const list = this.game.features.collidersNear(pos.x, pos.z, 3, this._camTmp || (this._camTmp = []));
+    if (MAX_FOLIAGE === null) {
+      MAX_FOLIAGE = 3;
+      for (const k in VEG_INFO) {
+        const f = VEG_INFO[k].foliage;
+        if (f) MAX_FOLIAGE = Math.max(MAX_FOLIAGE, f.r * 2.5);
+      }
+    }
+    const list = this.game.features.collidersNear(pos.x, pos.z, MAX_FOLIAGE, this._camTmp || (this._camTmp = []));
     for (const c of list) {
-      const f = FOLIAGE[c.type];
+      if (c.box) {
+        if (Math.abs(pos.x - c.x) < c.box.hw + 0.3 && Math.abs(pos.z - c.z) < c.box.hd + 0.3 && pos.y < c.y + c.h + 0.3) return true;
+        continue;
+      }
+      const f = VEG_INFO[c.type]?.foliage;
       if (!f) continue;
       const dy = pos.y - c.y;
       if (dy < f.y0 * c.s || dy > f.y1 * c.s) continue;

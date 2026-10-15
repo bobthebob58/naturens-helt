@@ -173,8 +173,8 @@ export class Vehicle {
       this.roll = damp(this.roll, roll, 8, dt);
     }
     if (Math.abs(this.speed) > 6 && !this.airborne && Math.random() < dt * 8) {
-      const biome = this.game.gen.biomeAt(this.pos.x, this.pos.z);
-      this.game.particles.burst(biome === 'ice' ? 'snow' : 'dust', { x: this.pos.x - fx * 1.5, y: this.pos.y + 0.2, z: this.pos.z - fz * 1.5 }, 1);
+      const surf = this.game.gen.biomeDef(this.pos.x, this.pos.z).surface;
+      this.game.particles.burst(surf === 'snow' ? 'snow' : 'dust', { x: this.pos.x - fx * 1.5, y: this.pos.y + 0.2, z: this.pos.z - fz * 1.5 }, 1);
     }
   }
 
@@ -201,8 +201,19 @@ export class Vehicle {
       this.speed *= -0.3;
       this.notifyBlocked('Du har nådd kanten av verden.');
     } else {
+      const px = this.pos.x, pz = this.pos.z;
       this.pos.x = nx;
       this.pos.z = nz;
+      // Steiner og trestammer som står i vannet (øyer, sump, fjellsjøer)
+      this.pos.y = WATER;
+      if (this.game.features.resolve(this.pos, cfg.collideRadius, this.game.extraColliders)) {
+        if (WATER - gen.groundHeight(this.pos.x, this.pos.z) < 0.45) {
+          this.pos.x = px;
+          this.pos.z = pz;
+        }
+        if (Math.abs(this.speed) > 3) this.notifyBlocked('Pass på steiner og trær i vannet!');
+        this.speed *= 0.5;
+      }
     }
     this.pos.y = WATER + Math.sin(this.time * 1.6) * 0.06 - 0.05;
     this.pitch = damp(this.pitch, this.speed / cfg.maxSpeed * 0.1 + Math.sin(this.time * 1.3) * 0.02, 3, dt);
@@ -250,7 +261,9 @@ export class Vehicle {
       this.vel.x *= -0.3;
       this.vel.z *= -0.3;
     }
-    const g2 = Math.max(gen.groundHeight(this.pos.x, this.pos.z), WATER);
+    // Bakke, vann eller et tak å lande på
+    const roof = this.game.features.roofBelow(this.pos.x, this.pos.z, this.pos.y + 0.3);
+    const g2 = Math.max(gen.groundHeight(this.pos.x, this.pos.z), WATER, roof);
     if (this.pos.y <= g2) {
       this.pos.y = g2;
       if (this.vel.y < 0) this.vel.y = 0;
@@ -264,7 +277,7 @@ export class Vehicle {
       this.pos.y = 320;
       this.vel.y = Math.min(0, this.vel.y);
     }
-    if (this.pos.y - g < 9) this.game.features.resolve(this.pos, cfg.collideRadius, this.game.extraColliders);
+    if (this.pos.y - g < 70) this.game.features.resolve(this.pos, cfg.collideRadius, this.game.extraColliders);
     // Helling
     const hx = Math.sin(this.heading), hz = Math.cos(this.heading);
     const fwdSpeed = this.vel.x * hx + this.vel.z * hz;

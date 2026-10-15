@@ -1,0 +1,22 @@
+{
+  "name": "naturens-helt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Naturens Helt – 3D-spill i nettleseren (Three.js). Spillet trenger ingen bygging; disse pakkene er bare utviklerverktøy.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "lint": "eslint js tools",
+    "check": "node tools/check.mjs",
+    "test": "npm run lint && npm run check",
+    "smoke": "node tools/run.mjs smoke",
+    "touch": "node tools/run.mjs touch --phone",
+    "map": "node tools/levelmap.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "playwright": "1.56.1",
+    "three": "0.170.0"
+  }
+}

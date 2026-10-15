@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { lambert, limb } from './geo.js';
 import { damp, clamp } from '../utils/math.js';
 
-function addBox(parent, w, h, d, color, x = 0, y = 0, z = 0) {
+export function addBox(parent, w, h, d, color, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(color));
   m.position.set(x, y, z);
   m.castShadow = true;
@@ -278,10 +278,12 @@ export const ANIMAL_DEFS = {
 };
 
 export class QuadrupedRig {
+  /** type: nøkkel i ANIMAL_DEFS, eller et eget definisjonsobjekt (samme felt + valgfri key). */
   constructor(type) {
-    const d = { ...ANIMAL_DEFS[type] };
+    const d = typeof type === 'string' ? { ...ANIMAL_DEFS[type] } : { ...type };
     this.d = d;
-    this.type = type;
+    this.type = typeof type === 'string' ? type : d.key || 'custom';
+    type = this.type;
     this.root = new THREE.Group();
     this.bodyG = new THREE.Group();
     this.bodyG.position.y = d.legLen + d.bodyH / 2;
@@ -319,8 +321,10 @@ export class QuadrupedRig {
     addBox(this.head, d.headH * 1.05, d.headH, d.headL * 0.6, d.color, 0, 0, d.headL * 0.2);
     addBox(this.head, d.headH * 0.6, d.headH * 0.6, d.headL * 0.5, d.belly, 0, -d.headH * 0.15, d.headL * 0.65);
     addBox(this.head, d.headH * 0.25, d.headH * 0.2, 0.04, d.snout, 0, -d.headH * 0.02, d.headL * 0.9);
-    addBox(this.head, 0.04, 0.04, 0.02, 0x111111, -d.headH * 0.38, d.headH * 0.15, d.headL * 0.45);
-    addBox(this.head, 0.04, 0.04, 0.02, 0x111111, d.headH * 0.38, d.headH * 0.15, d.headL * 0.45);
+    // Øyne på sidene av hodet (egne definisjoner legger på sine egne øyne)
+    if (!d.key) {
+      for (const s of [-1, 1]) addBox(this.head, 0.04, 0.04, 0.02, 0x111111, s * (d.headH * 0.525 - 0.012), d.headH * 0.2, d.headL * 0.5 - 0.012);
+    }
     // Ører
     const earC = d.color;
     if (d.ears === 'round') {

@@ -71,6 +71,21 @@ npx serve .
 | V | Bytt mellom 1. og 3. person |
 | Esc | Pause |
 
+### Mobil og nettbrett
+
+Spillet kan spilles med berøring på telefon og nettbrett (oppdages automatisk; `?touch` i adressen tvinger berøringsmodus).
+Hold telefonen liggende. Grafikk står på «Lav» som standard på mobil.
+
+| Berøring | Handling |
+| --- | --- |
+| Venstre tommel | Styrespak: gå / styre kjøretøy (helt ut = løp) |
+| Høyre tommel | Dra for å se deg rundt |
+| ⚔️ · ⤒ · 🏃 · 🥷 | Angrip · hopp (helikopter: opp, bil: brems) · løp (helikopter: ned) · snik |
+| ✋ · 🔁 | Samhandle / stig på og av (lyser når noe er i nærheten) · bytt våpen |
+| ⏸ 🗺️ 🛒 💊 🚲 🎥 | Pause · kart · butikk · medisin · velg kjøretøy · kamera |
+
+På Android går spillet i fullskjerm når du starter. På iPhone får du fullskjerm ved å velge «Del → Legg til på Hjem-skjerm» og starte spillet derfra.
+
 ## Baner
 
 Velg fritt mellom tre baner i startmenyen. Hver bane er en egen 4 × 4 km verden med tre biomer fra nord til sør, egne dyr og egne krypskytterleirer:

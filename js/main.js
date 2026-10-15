@@ -16,6 +16,7 @@ import { saveGame, loadSave, loadSettings, saveSettings } from './core/save.js';
 import { HUD } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
 import { Menus } from './ui/menus.js';
+import { TouchControls, isTouchDevice } from './ui/touch.js';
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
@@ -44,9 +45,11 @@ function blankStats() {
 
 class Game {
   constructor() {
-    this.settings = { quality: 'medium', sensitivity: 1, volume: 0.7, camera: 'third', ...loadSettings() };
     this.params = new URLSearchParams(location.search);
-    this.noLock = this.params.has('nolock');
+    // Mobil/nettbrett: berøringskontroller, ingen PointerLock og lav grafikk som standard
+    this.isTouch = isTouchDevice(this.params);
+    this.settings = { quality: this.isTouch ? 'low' : 'medium', sensitivity: 1, volume: 0.7, camera: 'third', ...loadSettings() };
+    this.noLock = this.params.has('nolock') || this.isTouch;
     const q = QUALITY[this.settings.quality] || QUALITY.medium;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: q.antialias, powerPreference: 'high-performance' });
@@ -77,6 +80,7 @@ class Game {
     this.hud = new HUD(this);
     this.minimap = new Minimap(this);
     this.menus = new Menus(this);
+    this.touch = this.isTouch ? new TouchControls(this) : null;
     this.chunks = null;
     this.gen = null;
     this.features = null;
@@ -130,6 +134,17 @@ class Game {
     this.env.setQuality(q);
     if (this.chunks) this.chunks.setQuality(q);
     this.onResize();
+  }
+
+  /** Mobil/nettbrett: fullskjerm og liggende format (må kalles direkte fra et trykk). */
+  enterFullscreen() {
+    if (!this.isTouch || document.fullscreenElement) return;
+    const el = document.documentElement;
+    if (!el.requestFullscreen) return; // f.eks. iPhone – legg spillet til på Hjem-skjermen i stedet
+    el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+      const o = screen.orientation;
+      if (o && o.lock) o.lock('landscape').catch(() => {});
+    }).catch(() => {});
   }
 
   // ------------------------------------------------------------------
@@ -469,6 +484,7 @@ class Game {
     const t2 = performance.now();
     this.prof.update = this.prof.update * 0.9 + (t1 - t0) * 0.1;
     this.prof.render = this.prof.render * 0.9 + (t2 - t1) * 0.1;
+    if (this.touch) this.touch.update();
     this.input.endFrame();
   }
 

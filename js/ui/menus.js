@@ -23,8 +23,22 @@ const CONTROLS = [
   ['Esc', 'Pause'],
 ];
 
-function controlsHTML() {
-  return CONTROLS.map(([k, d]) => `<div class="k">${k.split(' / ').map((x) => `<span class="key">${x}</span>`).join(' ')}</div><div class="d">${d}</div>`).join('');
+// Berøringskontroller (mobil og nettbrett)
+const TOUCH_CONTROLS = [
+  ['Venstre tommel', 'Styrespak: gå / styre (helt ut = løp)'],
+  ['Høyre tommel', 'Dra for å se deg rundt'],
+  ['⚔️', 'Angrip med våpen'],
+  ['⤒', 'Hopp (helikopter: opp, bil: brems)'],
+  ['🏃', 'Løp (helikopter: ned)'],
+  ['🥷', 'Gå på huk – snik (i vann: dykk)'],
+  ['✋', 'Samhandle · stig på/av · hent kjøretøy'],
+  ['🔁', 'Bytt våpen'],
+  ['⏸ 🗺️ 🛒', 'Pause · verdenskart · butikk'],
+  ['💊 🚲 🎥', 'Medisin · velg kjøretøy · kamera'],
+];
+
+function controlsHTML(touch) {
+  return (touch ? TOUCH_CONTROLS : CONTROLS).map(([k, d]) => `<div class="k">${k.split(' / ').map((x) => `<span class="key">${x}</span>`).join(' ')}</div><div class="d">${d}</div>`).join('');
 }
 
 export class Menus {
@@ -33,14 +47,14 @@ export class Menus {
     this.selectedDiff = game.settings.difficulty || 'medium';
     this.selectedLevel = LEVELS[game.settings.level] ? +game.settings.level : 1;
     this.shopTab = 0;
-    $('controls-grid').innerHTML = controlsHTML();
-    $('controls-grid-pause').innerHTML = controlsHTML();
+    $('controls-grid').innerHTML = controlsHTML(game.isTouch);
+    $('controls-grid-pause').innerHTML = controlsHTML(game.isTouch);
     this.buildLevels();
     this.buildDifficulty();
     this.bindSettings();
 
-    $('btn-new').onclick = () => game.startNewGame(this.selectedDiff);
-    $('btn-continue').onclick = () => game.continueGame();
+    $('btn-new').onclick = () => { game.enterFullscreen(); game.startNewGame(this.selectedDiff); };
+    $('btn-continue').onclick = () => { game.enterFullscreen(); game.continueGame(); };
     $('btn-resume').onclick = () => game.resume();
     $('btn-save').onclick = () => game.save(true);
     $('btn-shop').onclick = () => game.openShop();

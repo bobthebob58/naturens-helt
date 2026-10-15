@@ -342,9 +342,9 @@ export class Player {
     const input = g.input;
     const v = this.vehicle;
     const c = {
-      throttle: (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0),
-      steer: (input.down('KeyA') ? 1 : 0) - (input.down('KeyD') ? 1 : 0),
-      strafe: (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0),
+      throttle: input.moveY(),
+      steer: -input.moveX(),
+      strafe: input.moveX(),
       up: input.down('Space'),
       down: input.down('ShiftLeft') || input.down('ShiftRight') || input.down('ControlLeft'),
       brake: input.down('Space'),
@@ -384,9 +384,9 @@ export class Player {
       this.crouch = !this.crouch;
       g.hud.markDirty();
     }
-    const fwd = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
-    const side = (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0);
-    const wantRun = (input.down('ShiftLeft') || input.down('ShiftRight')) && fwd > 0;
+    const fwd = input.moveY();
+    const side = input.moveX();
+    const wantRun = (input.down('ShiftLeft') || input.down('ShiftRight') || input.axisRun) && fwd > 0;
     if (wantRun && this.crouch && !this.swimming) {
       this.crouch = false;
       g.hud.markDirty();
@@ -402,6 +402,7 @@ export class Player {
     let speed = this.crouch ? 2.3 : this.running ? 8.2 : 4.6;
     if (this.swimming) speed = this.running ? 4.0 : 2.8;
     if (this.attackT >= 0 && WEAPONS[this.weapon].type === 'melee') speed *= 0.8;
+    speed *= Math.min(1, len); // styrespaken gir glidende fart (tastaturet alltid full fart)
 
     const groundH = gen.groundHeight(this.pos.x, this.pos.z);
     const accel = this.onGround || this.swimming ? 12 : 2.5;

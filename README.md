@@ -111,6 +111,20 @@ I byen gjemmer smuglerne fangede dyr i skipscontainere, og husene blokkerer sikt
 - **Seier:** Stopp alle krypskytterne. Verdenskartet (M) viser områder der det er rapportert krypskytteraktivitet.
 - **Lagring:** Spillet lagres automatisk i nettleseren og kan fortsettes fra hovedmenyen (knappen viser hvilken bane som er lagret).
 
+## Utvikling
+
+Spillet trenger ingen bygging. Utviklerverktøyene krever Node 22:
+
+```bash
+npm install          # ESLint, Three.js og Playwright (bare for testing)
+npm test             # lint + raske kontroller av verden, modeller, dyr og leirer (sekunder)
+npm run smoke        # starter alle baner i en headless nettleser
+npm run touch        # tester berøringskontrollene på en liggende telefon
+npm start            # spillet på http://localhost:8000
+```
+
+GitHub Actions kjører de samme kontrollene på hver pull request. Se `CLAUDE.md` for arbeidsregler og flere verktøy.
+
 ## Kodestruktur
 
 ```
@@ -125,4 +139,5 @@ js/entities/        Spiller, kjøretøy, krypskyttere, dyr, mennesker, AI
 js/systems/         Kamp, partikler, oppdrag
 js/ui/              HUD, minikart/verdenskart, menyer og butikk
 js/core/            Input, lyd (Web Audio) og lagring
+tools/              Utviklerverktøy: webserver, kontroller (check.mjs) og nettleserscenarier (run.mjs + scenarios/)
 ```

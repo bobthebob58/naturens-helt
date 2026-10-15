@@ -1,0 +1,57 @@
+# Gratis automatiske kontroller på hver PR og hver push til main (bruker ingen Claude-kreditter).
+name: Sjekk
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sjekk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-og-kontroller:
+    name: Lint og kontroller (Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: npm run lint
+      - run: npm run check
+
+  roeyktest:
+    name: Røyktest i nettleseren (alle baner + mobil)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke
+        env:
+          Q: low
+          W: '800'
+          H: '450'
+      - run: npm run touch
+      - name: Last opp skjermbilder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skjermbilder
+          path: tools/out/
+          retention-days: 7

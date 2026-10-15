@@ -27,7 +27,7 @@ const SYSTEM = [
 export function isTouchDevice(params) {
   if (params.has('touch')) return true;
   if (params.has('notouch')) return false;
-  return window.matchMedia?.('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+  return window.matchMedia?.('(pointer: coarse)').matches && window.navigator.maxTouchPoints > 0;
 }
 
 export class TouchControls {

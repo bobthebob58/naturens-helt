@@ -142,7 +142,7 @@ class Game {
     const el = document.documentElement;
     if (!el.requestFullscreen) return; // f.eks. iPhone – legg spillet til på Hjem-skjermen i stedet
     el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
-      const o = screen.orientation;
+      const o = window.screen.orientation;
       if (o && o.lock) o.lock('landscape').catch(() => {});
     }).catch(() => {});
   }
